@@ -58,7 +58,8 @@ Bu örnekte statik v20 medyanı yaklaşık **%8,4 daha uzun**. İki koşuluk ör
 
 - Katman kompozisyonu render tabanlıdır. Donanım hızlandırması burada kodlama için kullanıldı. Anlık GPU kompozisyonu ve uzun önizlemeler ayrı çalışma gerektirir.
 - Döndürme klibin görüntü kutusuna uygulanır. Köşeler bu kutunun dışında kalabilir. Keyframe kullanılan metin kliplerinde proje yazı stili ve anahtar kare animasyonu uygulanır.
-- Windows 10 / 8 GB, 4K uzun dışa aktarma, saatler süren bellek testi, zorlanan NVENC sürücü arızası ve canlı yayın hesapları ölçülmedi.
+- İmzasız Windows x64 Setup ve Portable oluşturuldu. Portable, Node.js ve FFmpeg PATH'ten çıkarılmışken açıldı, paket içi FFmpeg efekt önizlemesini tamamladı ve kapanınca yerel servisi durdurdu. Mevcut önizleme sırası geçici iş çakışmasını yeniden deneyerek çözdü.
+- Windows 10 / 8 GB, Setup kurulum/kaldırma, 4K uzun dışa aktarma, saatler süren bellek testi, zorlanan NVENC sürücü arızası ve canlı yayın hesapları doğrulanmadı.
 - Yeni npm bağımlılığı eklenmedi. Paket içi FFmpeg/FFprobe 9.0.2 Essentials GPL derlemesinin statik bağımlılıkları için eşleşen kaynak ve derleme malzemeleri incelemesi açık. v20 paketleri yerel doğrulama adayıdır. [Üçüncü taraf bildirimleri](THIRD_PARTY_NOTICES.md) · [FFmpeg lisans bilgileri](https://ffmpeg.org/legal.html)
 
 ## Tekrarlama
