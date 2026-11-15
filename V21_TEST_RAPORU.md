@@ -55,6 +55,7 @@ Statik koşuların çıktı dosyası boyutu ve 15. saniyedeki çözülmüş kare
 - Efekt stüdyosu video kliplerine bağlı. Metin ve görsel hazırlama için önceki animasyon akışları kullanılabilir. Doğrudan metin/bağımsız görsel efekt hattı, zamansal motion blur ve listedeki ek gelişmiş geçişler bu sürümde eksik.
 - Efektli kliplerin tek klip halinde birleştirilmesi henüz uygulanmadı. Başlık, Mastering ve bağımsız ses yolları önceki davranış ve düzenleme noktalarını korur.
 - Birleşik önizleme sekiz saniyeyle sınırlı render kullanır. Gerçek zamanlı GPU kompozisyonu ve yeni proxy motoru eksik. NVENC kodlama ve mevcut CPU alternatif yolu korunur.
+- Windows x64 Setup ve Portable yerelde üretildi. Portable temiz test profiliyle açıldı, paket içi FFmpeg ile önizleme tamamladı ve kapandığında yerel servisi durdurdu.
 - Windows 10 / 8 GB, uzun 4K çıktı, sürücü arızasıyla zorlanan NVENC geçişi ve Setup kurulum/kaldırma doğrulanmadı. 4K denemesi kaynak çözme ve 1080p çıktı içindir.
 - Yeni npm bağımlılığı eklenmedi. Electron izolasyonu, sandbox, IPC doğrulaması ve kayıtlı medya erişimi kullanılır. FFmpeg’in statik GPL derlemesinde eşleşen kaynak ve derleme malzemeleri incelemesi açık. Windows paketleri yerel adaydır. [Üçüncü taraf bildirimleri](THIRD_PARTY_NOTICES.md) · [FFmpeg lisans bilgileri](https://ffmpeg.org/legal.html)
 
