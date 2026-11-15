@@ -10,7 +10,7 @@
 | High | Native media runtime | The published packages include FFmpeg/FFprobe 9.0.1. The local validation candidate advances to 9.0.2. The published packages still contain the older runtime. Use trusted media until an updated distributable package is approved. |
 | Medium | Input and resource limits | Defensive limits on downloaded update metadata and local project reads were tightened for the candidate. The desktop startup and local session marker were hardened. Existing file compatibility and update checks were tested. |
 | Low | Package authenticity | The published assets’ GitHub SHA-256 digests match the audited local installer and portable archive. The packages are unsigned. Checksums provide integrity verification and do not replace a publisher signature. |
-| Low | Build reproducibility | The published source archive includes a pinned, read-only test workflow recipe. The published repository history did not include a live workflow on the default branch. The legacy recipe requires an unpublished media bundle. The candidate validation is currently local. |
+| Low | Build reproducibility | The published tag includes its workflow recipe in the source ZIP. The proposed source branch exposes that workflow in the Git tree and uses a verified test media bundle with read-only repository permissions. The workflow does not publish installers. |
 
 The FFmpeg distribution and corresponding-source review is tracked separately in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). [FFmpeg supported downloads](https://ffmpeg.org/download.html) · [FFmpeg security notes](https://ffmpeg.org/security.html)
 
@@ -25,6 +25,6 @@ The FFmpeg distribution and corresponding-source review is tracked separately in
 
 ## Validation
 
-TypeScript, Vite and lint passed. 83 automated tests passed using the 9.0.2 media tools, including real FFmpeg exports, Turkish/English Whisper, local E5, subtitles and silence handling. Windows 10 and 8 GB hardware were not available for validation. See the [original beta report](V18_1_BETA_TEST_RAPORU.md) for tests of the published v18.1 package.
+TypeScript, Vite and lint passed. 83 automated tests passed using the 9.0.2 media tools, including real FFmpeg exports, Turkish/English Whisper, local E5, subtitles and silence handling. The rebuilt Portable candidate passed the local startup and FFmpeg preview checks. See the [candidate validation report](V18_1_1_BETA_TEST_RAPORU.md) and the [original beta report](V18_1_BETA_TEST_RAPORU.md).
 
 For a suspected vulnerability, use the [private disclosure policy](SECURITY.md).
