@@ -1,6 +1,6 @@
 {
   "name": "viralcut-ai-desktop",
-  "version": "18.1.1-beta",
+  "version": "19.0.0",
   "private": true,
   "type": "module",
   "main": "desktop/main.mjs",

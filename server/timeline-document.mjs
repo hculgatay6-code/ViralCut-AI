@@ -36,7 +36,7 @@ export function timelineDocument(value, hasMedia) {
         requireValid(typeof clip.text === 'string' && clip.text.trim() && clip.text.length <= 500)
         return { ...base, text: clip.text }
       }
-      requireValid(typeof clip.mediaId === 'string' && hasMedia(clip.mediaId) &&
+      requireValid(typeof clip.mediaId === 'string' && hasMedia(clip.mediaId, kind) &&
         Number.isSafeInteger(clip.inFrame) && clip.inFrame >= 0 && clip.inFrame + clip.length <= max)
       const source = { ...base, mediaId: clip.mediaId, inFrame: clip.inFrame }
       if (kind === 'audio') return source

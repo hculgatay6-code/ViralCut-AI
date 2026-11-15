@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('viralCutDesktop', {
       return () => ipcRenderer.removeListener('viralcut:flush-recovery', listener)
     },
     confirmClose: () => ipcRenderer.invoke('viralcut:close-confirmed'),
+    addAudio: () => ipcRenderer.invoke('viralcut:layer-audio-add'),
     addMedia: () => ipcRenderer.invoke('viralcut:media-add'),
     relink: id => ipcRenderer.invoke('viralcut:media-relink', id),
     open: () => ipcRenderer.invoke('viralcut:project-open'),

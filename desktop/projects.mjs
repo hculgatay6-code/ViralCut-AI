@@ -11,7 +11,7 @@ import { remapTimeline, timelineDocument } from '../server/timeline-document.mjs
 
 const maxBytes = 8 * 1024 * 1024
 const uuid = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i
-const mediaTypes = { '.mp4': 'video/mp4', '.webm': 'video/webm' }
+const mediaTypes = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4' }
 const mediaFormat = path => mediaTypes[extname(path).toLowerCase()]
 export function localPath(path) {
   // Restrict project links to regular local drive paths (no UNC, devices, or alternate streams).
@@ -27,11 +27,13 @@ export function projectDocument(data) {
   requireValid([1, 2].includes(data?.version) && Array.isArray(data.media) && data.media.length <= 100 &&
     Array.isArray(data.clips) && data.clips.length <= 500)
   const ids = new Set()
+  const audio = new Set()
   const media = data.media.map(item => {
     requireValid(item && typeof item.id === 'string' && uuid.test(item.id) && !ids.has(item.id) &&
       localPath(item.path) && mediaFormat(item.path) && Number.isSafeInteger(item.size) && item.size > 0 &&
       typeof item.fingerprint === 'string' && /^[a-f\d]{64}$/.test(item.fingerprint))
     ids.add(item.id)
+    if (mediaFormat(item.path).startsWith('audio/')) audio.add(item.id)
     requireValid(Array.isArray(item.cues) && item.cues.length <= 10000)
     const checked = item.cues.map(cue => {
       const blank = typeof cue?.text === 'string' && !cue.text.trim() && cue.text.length <= 500 && cue.words === undefined
@@ -43,7 +45,7 @@ export function projectDocument(data) {
   const appearance = validateOverlay({ cues: [{ start: 0, end: 1, text: 'x' }], appearance: data.appearance }).appearance
   const clipIds = new Set()
   const clips = data.clips.map(clip => {
-    requireValid(clip && uuid.test(clip.id) && !clipIds.has(clip.id) && ids.has(clip.mediaId) &&
+    requireValid(clip && uuid.test(clip.id) && !clipIds.has(clip.id) && ids.has(clip.mediaId) && !audio.has(clip.mediaId) &&
       Number.isFinite(clip.start) && Number.isFinite(clip.end) && clip.start >= 0 &&
       clip.end - clip.start >= 0.001 && clip.end <= 864000)
     clipIds.add(clip.id)
@@ -56,7 +58,7 @@ export function projectDocument(data) {
   const frame = data.frame === undefined ? undefined : validateEdit({ frame: data.frame }).frame
   const profile = validateProfile(data.profile)
   requireValid(profile && ['auto', 'cpu'].includes(data.encoder))
-  const timeline = data.version === 2 ? timelineDocument(data.timeline, id => ids.has(id)) : undefined
+  const timeline = data.version === 2 ? timelineDocument(data.timeline, (id, kind) => ids.has(id) && (kind === 'audio' || !audio.has(id))) : undefined
   return { version: data.version, ...(timeline ? { timeline } : {}), media, clips, appearance, frame, profile, encoder: data.encoder, burn: data.burn !== false,
     mastering: studioAudioSettings(data.mastering) }
 }
@@ -109,7 +111,7 @@ export function createProjectStore(recoveryFile, previousRelease) {
   const older = recoveryFile + '.previous'
   async function findRecovery() {
     let damaged = false
-    for (const path of [recoveryFile, older, previousRelease].filter(Boolean)) {
+    for (const path of [recoveryFile, older, ...[previousRelease].flat()].filter(Boolean)) {
       try { return { document: await readDocument(path), fallback: path !== recoveryFile } }
       catch (error) { if (error.code !== 'ENOENT') damaged = true }
     }
@@ -117,11 +119,12 @@ export function createProjectStore(recoveryFile, previousRelease) {
   }
 
   function view(id, entry, cues = []) {
-    return { id, name: basename(entry.path), size: entry.size, cues, missing: !entry.available }
+    return { id, name: basename(entry.path), size: entry.size, cues, missing: !entry.available, ...(mediaFormat(entry.path).startsWith('audio/') ? { audioOnly: true } : {}) }
   }
 
-  async function register(path, reuse = false) {
+  async function register(path, reuse = false, audioOnly = false) {
     const media = await describe(path)
+    requireValid(mediaFormat(media.path).startsWith('audio/') === audioOnly)
     if (reuse) for (const [id, entry] of registered) {
       if (entry.available && entry.path === media.path && entry.fingerprint === media.fingerprint) return view(id, entry)
     }
@@ -134,7 +137,8 @@ export function createProjectStore(recoveryFile, previousRelease) {
     const previous = registered.get(id)
     requireValid(previous && !previous.available)
     const next = await describe(path)
-    requireValid(next.size === previous.size && next.fingerprint === previous.fingerprint)
+    requireValid(next.size === previous.size && next.fingerprint === previous.fingerprint &&
+      mediaFormat(next.path) === mediaFormat(previous.path))
     registered.set(id, { ...next, available: true })
     return view(id, registered.get(id))
   }
@@ -173,6 +177,7 @@ export function createProjectStore(recoveryFile, previousRelease) {
 
   return {
     register, relink,
+    isAudio(id) { const entry = registered.get(id); return !!entry && mediaFormat(entry.path).startsWith('audio/') },
     async protects(path) {
       const resolved = await realpath(path).catch(() => null)
       if (!resolved) return false

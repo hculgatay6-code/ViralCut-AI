@@ -12,7 +12,7 @@ export type ExportErrorCode =
   | 'toolsUnavailable' | 'uploadFailed' | 'jobMissing' | 'serviceError'
   | 'invalidName' | 'saveFailed' | 'accessDenied' | 'sourceProtected'
   | 'whisperUnavailable' | 'noAudio' | 'transcriptFailed' | 'badSubtitles' | 'tooManyCues'
-  | 'badEdit' | 'emptyEdit'
+  | 'badEdit' | 'emptyEdit' | 'layerConcurrency'
   | 'missingProjectMedia' | 'verifyFailed' | 'clipDecodeFailed' | 'visualDecodeFailed'
 
 export interface ExportJob {
@@ -185,6 +185,14 @@ export const localExporter = {
   },
   upload,
   monitorUrl(id: string) { return base + '/' + id + '/monitor' },
+  createLayers(project: Project, preview?: { from: number; to: number }) {
+    return request<ExportJob>('', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'sequence', timeline: project.timeline, frame: project.frame,
+        profile: { ...project.profile, fps: project.timeline?.fps }, appearance: project.appearance,
+        encoder: project.encoder, burn: project.burn, preview }),
+    })
+  },
   createSequence(project: Project, monitor = false) {
     const media = new Map(project.media.map(item => [item.id, item]))
     return request<ExportJob>('', {

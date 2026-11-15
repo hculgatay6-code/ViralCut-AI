@@ -52,14 +52,16 @@ export function run(program, args, signal, onLine, { stderrLines = false, cwd } 
 }
 
 export function inputOptions(format) {
-  return ['-protocol_whitelist', 'file', '-f', format === 'mp4' ? 'mov' : 'matroska',
-    ...(format === 'mp4' ? ['-enable_drefs', '0', '-use_absolute_path', '0'] : [])]
+  if (format === 'mp3' || format === 'wav') return ['-protocol_whitelist', 'file', '-f', format]
+  const mov = format === 'mp4' || format === 'm4a'
+  return ['-protocol_whitelist', 'file', '-f', mov ? 'mov' : 'matroska',
+    ...(mov ? ['-enable_drefs', '0', '-use_absolute_path', '0'] : [])]
 }
 
 export async function probe(file, format, signal) {
   return JSON.parse(await run('ffprobe', [
     '-v', 'error', ...inputOptions(format), '-show_entries',
-    'format=duration:stream=codec_type,width,height,codec_name,avg_frame_rate,duration:stream_disposition=attached_pic',
+    'format=duration:stream=codec_type,width,height,codec_name,avg_frame_rate,nb_frames,duration:stream_disposition=attached_pic',
     '-of', 'json', '-i', file,
   ], AbortSignal.any([signal, AbortSignal.timeout(45000)])))
 }

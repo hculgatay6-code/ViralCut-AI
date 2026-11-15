@@ -67,7 +67,7 @@ export function App() {
   const desktop = !!window.viralCutDesktop
   const [studioTab, setStudioTab] = useState<'media' | 'subtitles' | 'audio' | 'ai' | 'effects' | 'cover' | 'director' | 'performance' | 'copilot' | 'creator' | 'settings'>('media')
   const [beta, setBeta] = useState<BetaPreferences>()
-  const [version, setVersion] = useState('18.1.1-beta')
+  const [version, setVersion] = useState('19.0.0')
   const [creatorIntent, setCreatorIntent] = useState<CreatorIntent>()
   const [copilotProject, setCopilotProject] = useState(0)
   const [safeGuides, setSafeGuides] = useState(false)
@@ -75,6 +75,7 @@ export function App() {
   const [rightSize, setRightSize] = useState(255)
   const [timelineSize, setTimelineSize] = useState(300)
   const [sourceTab, setSourceTab] = useState(false)
+  const [monitorHost, setMonitorHost] = useState<HTMLDivElement | null>(null)
   const [settingsHost, setSettingsHost] = useState<HTMLDivElement | null>(null)
   const [speechHost, setSpeechHost] = useState<HTMLDivElement | null>(null)
   const [waveforms, setWaveforms] = useState<Record<string, Waveform>>({})
@@ -483,6 +484,7 @@ export function App() {
               <span className="media-label" title={source?.file.name}>{source?.file.name ?? copy.noSource}</span>
               {source && <button type="button" className="export-cancel" onClick={() => detachPreview()} aria-label={copy.clearSource} title={copy.clearSource}><X size={15} /></button>}
             </header>
+            <div className="layer-monitor-host" ref={setMonitorHost} />
             <div className={'stage' + (dragging ? ' dragging' : '') + (frame ? ' framed-stage' : '')}>
               <div className={'video-frame' + (frame ? ' framed' : fitCaption ? ' caption-fit' : '')} style={previewStyle}>
               {source && (
@@ -602,7 +604,11 @@ export function App() {
             <div className="studio-library-body">
               {source && !mountedSource && <p>{source.file.name}</p>}
               {!source && !project.media.length && <p>{copy.emptyHelp}</p>}
-              {project.media.map(media => <button key={media.id} type="button" disabled={media.missing || !project.clips.some(clip => clip.mediaId === media.id)}
+              {project.media.map(media => <button key={media.id} type="button" draggable={!media.missing && !!project.timeline} disabled={media.missing}
+                onDragStart={event => {
+                  event.dataTransfer.setData('application/x-viralcut-media', media.id)
+                  event.dataTransfer.effectAllowed = 'copy'
+                }}
                 onClick={() => {
                   const clip = project.clips.find(clip => clip.mediaId === media.id)
                   if (clip) { stopSequence(); positionClip(clip, false) }
@@ -664,13 +670,13 @@ export function App() {
           </aside>
           {!desktop && singleExport}
           <ProjectPanel project={project} copy={copy} media={projectMedia} current={currentClip} setCurrent={setCurrentClip}
-            autosaveInterval={beta?.interval ?? 5} language={language}
+            autosaveInterval={beta?.interval ?? 5} language={language} projectEpoch={copilotProject}
             undo={!!history.previous.length} redo={!!history.next.length} history={type => { stopSequence(); dispatch({ type }) }}
             update={updateProject} load={loadProject} addMedia={entries => { void addProjectMedia(entries) }}
             playhead={time} playback={sequencePlaying} stop={stopSequence} play={playSequence}
             select={clip => { stopSequence(); positionClip(clip, false) }}
             duration={metadata?.duration ?? 0} range={range} setProfile={profile => updateProject(value => ({ ...value, profile }))}
-            framing={edit.frame} removals={edit.remove} settingsHost={settingsHost} speechHost={speechHost} waveforms={waveforms}
+            framing={edit.frame} removals={edit.remove} monitorHost={monitorHost} settingsHost={settingsHost} speechHost={speechHost} waveforms={waveforms}
             openSource={() => setSourceTab(true)} selectSpeech={useCandidate} seekProject={(clip, seconds) => {
               stopSequence(); positionClip(clip, false, project.media, seconds)
             }} />

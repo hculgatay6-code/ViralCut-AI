@@ -31,7 +31,8 @@ export function layerFromLegacy(project: Project): LayerTimeline {
   for (const clip of project.clips) {
     const from = Math.round(clip.start * fps)
     const length = Math.floor(clip.end * fps + 0.001) - from
-    if (length < 1 || at + length > fps * 86400 || items + 1 + Number(!clip.muteAudio) > limit) break
+    if (length < 1) continue
+    if (from + length > fps * 86400 || at + length > fps * 86400 || items + 1 + Number(!clip.muteAudio) > limit) break
     tracks[0].clips.push(mediaClip(clip.mediaId, 'video', at, from, length))
     items++
     if (!clip.muteAudio) {
@@ -70,7 +71,7 @@ function withClips(timeline: LayerTimeline, changes: Map<string, TimelineClip[]>
     if (!changes.has(track.id)) continue
     if (track.locked || track.clips.some((clip, i) =>
       ![clip.at, clip.length, clip.inFrame ?? 0].every(Number.isSafeInteger) || clip.at < 0 ||
-      clip.length < 1 || (clip.inFrame ?? 0) < 0 || clip.at + clip.length > timeline.fps * 86400 ||
+      clip.length < 1 || (clip.inFrame ?? 0) < 0 || Math.max(clip.at, clip.inFrame ?? 0) + clip.length > timeline.fps * 86400 ||
       (i > 0 && track.clips[i - 1].at + track.clips[i - 1].length > clip.at))) return null
   }
   return { ...timeline, tracks }

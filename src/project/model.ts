@@ -7,7 +7,7 @@ import type { LayerTimeline } from './layer-model'
 
 export interface Profile { resolution: 720 | 1080; fps: 24 | 25 | 30 | 50 | 60; quality: 'quality' | 'balanced' | 'small'; bitrate: number }
 export const defaultProfile: Profile = { resolution: 1080, fps: 30, quality: 'balanced', bitrate: 0 }
-export interface ProjectMedia { id: string; name: string; size: number; missing: boolean; cues: Cue[] }
+export interface ProjectMedia { id: string; name: string; size: number; missing: boolean; audioOnly?: boolean; cues: Cue[] }
 export interface ProjectClip extends ClipRange { id: string; mediaId: string; muteAudio?: boolean; effects?: StudioEffects; transition?: StudioTransition }
 export interface Project {
   version: 1 | 2
@@ -24,6 +24,7 @@ export interface Project {
 export interface ProjectBridge {
   onClose(callback: () => void): () => void
   confirmClose(): Promise<void>
+  addAudio(): Promise<{ media?: ProjectMedia; cancelled?: boolean; error?: string }>
   addMedia(): Promise<{ media?: ProjectMedia[]; rejected?: number; cancelled?: boolean; error?: string }>
   relink(id: string): Promise<{ media?: ProjectMedia; cancelled?: boolean; error?: string }>
   open(): Promise<{ project?: Project; cancelled?: boolean; error?: string }>

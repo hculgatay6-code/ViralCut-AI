@@ -1,5 +1,5 @@
-appId: com.viralcut.desktop.v18beta
-productName: ViralCut AI v18.1 Beta
+appId: com.viralcut.desktop.v19
+productName: ViralCut AI v19
 directories:
   output: release
 asar: true
@@ -15,6 +15,8 @@ files:
   - server/whisper.mjs
   - server/shorts.mjs
   - server/sequence.mjs
+  - server/layers.mjs
+  - server/timeline-document.mjs
   - server/preview.mjs
   - server/shorts-batch.mjs
   - server/shorts-quality.mjs

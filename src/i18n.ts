@@ -181,6 +181,7 @@ export const messages = {
     exportSaved: 'Kaydedildi', exportDownloaded: 'İndirme başlatıldı. Tarayıcının indirmelerini kontrol et.',
     exportCancelled: 'Dışa aktarma iptal edildi.',
     exportErrors: {
+      layerConcurrency: 'Aynı anda en fazla beş video ve sekiz ses katmanı işlenebilir.',
       badRequest: 'Dışa aktarma isteği geçersiz. Videoyu yeniden açıp dene.',
       badSource: 'Kaynak video işlenemedi. Dosyanın sağlam bir MP4 veya WebM olduğunu kontrol et.',
       badRange: 'Seçimi kontrol et. Aralık en az 0,001 saniye ve video süresi içinde olmalı.',
@@ -388,6 +389,7 @@ export const messages = {
     exportSaved: 'Saved', exportDownloaded: 'Download started. Check your browser downloads.',
     exportCancelled: 'Export cancelled.',
     exportErrors: {
+      layerConcurrency: 'A maximum of five video and eight audio layers can overlap.',
       badRequest: 'Invalid export request. Reopen the video and try again.',
       badSource: 'Could not process the source video. Check that it is a valid MP4 or WebM.',
       badRange: 'Choose at least 0.001 seconds within the video duration.',

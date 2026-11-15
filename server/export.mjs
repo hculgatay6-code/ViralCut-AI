@@ -10,6 +10,7 @@ import { validateOverlay } from './ass.mjs'
 import { transcribe, whisperAvailability } from './whisper.mjs'
 import { instanceId } from './instance.mjs'
 import { analyzeSilence, validateAnalysis, validateEdit, validateProfile } from './shorts.mjs'
+import { encodeLayeredSequence, validateLayeredSequence } from './layers.mjs'
 import { encodeSequence, validateSequence } from './sequence.mjs'
 import { analyzeShorts, batchSize, readShortsAnalysis, startShortsBatch } from './shorts-batch.mjs'
 import { createSemanticService } from './semantic-service.mjs'
@@ -65,6 +66,7 @@ async function readSettings(request, resolveMedia) {
   }
   const { start, end, overlay, kind = 'export', language, device, mediaId } = settings ?? {}
   if (kind === 'sequence') {
+    if (settings.timeline !== undefined) return validateLayeredSequence(settings, resolveMedia)
     const sequence = validateSequence(settings, resolveMedia)
     const monitor = settings.monitor === true
     if (monitor && (sequence.parts.length !== 2 || sequence.parts.reduce((total, part) => total + part.end - part.start, 0) > 8.01 ||
@@ -151,7 +153,7 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
     job.progress = 0
     job.started = performance.now()
     const processJob = job.kind === 'shorts-analysis' ? analyzeShorts : job.kind === 'transcribe' ? transcribe : job.kind === 'silence' ? analyzeSilence
-      : job.kind === 'sequence' ? encodeSequence : encodeClip
+      : job.spans ? encodeLayeredSequence : job.kind === 'sequence' ? encodeSequence : encodeClip
     const signal = job.controller.signal
     let heavy = false
     job.work = schedule(job.kind, signal, async () => {
@@ -173,7 +175,7 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
         directory: job.directory, language: job.language, device: job.device, overlay: job.overlay,
         analysis: job.analysis, edit: job.edit, effects: job.effects,
         semantic, vision, goal: job.goal, duration: job.duration, visualMode: job.visualMode, visualDevice: job.visualDevice, director: job.director,
-        parts: job.parts, frame: job.frame, profile: job.profile, encoder: job.encoder, mastering: job.mastering,
+        parts: job.parts, spans: job.spans, titles: job.titles, frame: job.frame, profile: job.profile, encoder: job.encoder, mastering: job.mastering,
         signal: job.controller.signal,
         onStage: stage => { job.stage = stage },
         onProgress: progress => { job.progress = Math.max(job.progress, progress) },

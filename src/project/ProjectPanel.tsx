@@ -8,9 +8,12 @@ import { moveClip, subtractSpeech, timelineLayout } from './model'
 import { ExportClientError, localExporter } from '../export/client'
 import type { ExportJob } from '../export/client'
 
+import { LayeredTimeline } from './LayeredTimeline'
+import { layerDuration, layerFromLegacy } from './layer-model'
+
 type Props = {
   project: Project; copy: Copy; media?: ProjectMedia; undo: boolean; redo: boolean; playhead: number
-  autosaveInterval: number; language: Language
+  autosaveInterval: number; language: Language; projectEpoch: number
   playback: boolean; stop: () => void; play: () => void; select: (clip: ProjectClip) => void
   current: string; setCurrent: (id: string) => void
   update: (apply: (project: Project) => Project) => void; load: (project: Project) => void
@@ -18,6 +21,7 @@ type Props = {
   range: ClipRange; duration: number; setProfile: (profile: Profile) => void
   framing?: Project['frame']
   removals: ClipRange[]
+  monitorHost: HTMLDivElement | null
   settingsHost: HTMLDivElement | null; speechHost: HTMLDivElement | null
   openSource: () => void; selectSpeech: (range: ClipRange) => void; seekProject: (clip: ProjectClip, time: number) => void
   waveforms?: Record<string, Waveform>
@@ -181,6 +185,8 @@ export function ProjectPanel(props: Props) {
   const { autosaveInterval, language } = props
   const tr = language === 'tr'
   const bridge = window.viralCutDesktop?.projects
+  const [legacy, setLegacy] = useState(false)
+  const layered = !legacy && project.timeline
   const [zoom, setZoom] = useState(85)
   const [dragged, setDragged] = useState<number>()
   const [selectedSpeech, setSelectedSpeech] = useState<Set<number>>(new Set())
@@ -200,7 +206,7 @@ export function ProjectPanel(props: Props) {
   ref.current = project
   const autosave = useCallback(async () => {
     const latest = ref.current
-    if (!bridge || !autosaveInterval || !latest.media.length || latest === lastSaved.current || writing.current) return
+    if (!bridge || !autosaveInterval || (!latest.media.length && !latest.timeline) || latest === lastSaved.current || writing.current) return
     writing.current = bridge.autosave(latest).then(result => {
       if (result.saved) { lastSaved.current = latest; setSaved(latest) }
       setAutosaveFailed(!result.saved && !result.disabled)
@@ -240,7 +246,7 @@ export function ProjectPanel(props: Props) {
         const result = kind === 'recover' ? await bridge.recover() : await bridge.open()
         if (result.error) throw Error()
         if (result.project) {
-          props.load(result.project); setRecovery({}); setNotice(copy.projectLoaded)
+          props.load(result.project); setLegacy(false); setRecovery({}); setNotice(copy.projectLoaded)
           if (result.project.media.some(item => item.missing)) {
             setFailed(true)
             setNotice(tr ? 'Proje açıldı. Eksik videoları medya listesinden yeniden bağla.' : 'Project opened. Relink missing videos from the media list.')
@@ -307,7 +313,18 @@ export function ProjectPanel(props: Props) {
   const buttons = <div className="shorts-actions project-files">
     <button className="primary" disabled={dialog || project.media.length >= 100} onClick={() => void projectDialog('add')}>{copy.addProjectMedia}</button>
     <button className="export-cancel" disabled={dialog} onClick={() => void projectDialog('open')}>{copy.openProject}</button>
-    <button className="export-cancel" disabled={dialog || !project.media.length} onClick={() => void projectDialog('save')}>{copy.saveProject}</button>
+    <button className="export-cancel" disabled={dialog || (!project.media.length && !project.timeline)} onClick={() => void projectDialog('save')}>{copy.saveProject}</button>
+    <button className="export-cancel" aria-pressed={!!layered} onClick={() => {
+      stop()
+      if (layered) setLegacy(true)
+      else {
+        setLegacy(false)
+        if (!project.timeline) {
+          update(value => ({ ...value, version: 2, timeline: layerFromLegacy(value) }))
+          setNotice(tr ? 'Katmanlar oluşturuldu. Önceki kurgu eski düzen görünümünde korunur.' : 'Layers created. The original edit is available in the legacy view.')
+        }
+      }
+    }}>{layered ? (tr ? 'Eski düzen' : 'Legacy sequence') : (tr ? 'Katmanlı düzen' : 'Multitrack editor')}</button>
     {recovery.available && <button className="export-cancel" disabled={dialog} onClick={() => void projectDialog('recover')}>{copy.recoverProject}</button>}
     {recovery.available && <button className="export-cancel" disabled={dialog} onClick={() => setRecovery({})}>{tr ? 'Bu oturumda atla' : 'Skip for this session'}</button>}
     {recovery.damaged && <span role="alert">{tr ? 'Otomatik kayıt okunamadı. Kayıtlı projeyi elle açabilirsin.' : 'Autosave could not be read. You can open a saved project.'}</span>}
@@ -323,7 +340,7 @@ export function ProjectPanel(props: Props) {
       event.preventDefault(); split()
     }
   }}>
-    <header className="panel-header"><h2>{copy.projectHeading}</h2><span>{timecode(total)}</span></header>
+    <header className="panel-header"><h2>{copy.projectHeading}</h2><span>{timecode(layered ? layerDuration(layered) / layered.fps : total)}</span></header>
     <div className="project-body">
       {buttons}
       {!project.media.length && <p>{copy.projectEmpty}</p>}
@@ -332,7 +349,9 @@ export function ProjectPanel(props: Props) {
           onClick={() => void projectDialog('relink', entry.id)}>{copy.relinkMedia}</button>
       </div>)}
       {notice && <p role={failed ? 'alert' : 'status'}>{notice}</p>}
-      {!!project.media.length && <>
+      {layered && <LayeredTimeline key={props.projectEpoch} project={project} copy={copy} tr={tr} inspector={props.settingsHost} monitor={props.monitorHost}
+        undo={props.undo} redo={props.redo} history={props.history} change={update} waveforms={props.waveforms} stop={stop} />}
+      {!layered && !!project.media.length && <>
         <div className="shorts-actions">
           <button className="export-cancel" disabled={!props.undo} onClick={() => props.history('undo')}>{copy.undo}</button>
           <button className="export-cancel" disabled={!props.redo} onClick={() => props.history('redo')}>{copy.redo}</button>

@@ -31,7 +31,7 @@ const types = {
   '.woff': 'font/woff', '.woff2': 'font/woff2',
 }
 const secret = randomBytes(32).toString('hex')
-const csp = "default-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+const csp = "default-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const previousProfile = join(app.getPath('appData'), 'ViralCut AI Desktop')
 let win, web, service, origin
@@ -267,6 +267,15 @@ function registerDialogs() {
     if (!localPath(path) || extname(path).toLowerCase() !== '.' + format) return { error: 'badCover' }
     await writeStudioFile(path, data)
     return { saved: true }
+  }, true)
+  safeHandle('layer-audio-add', async () => {
+    const audioExtensions = ['wav', 'mp3', 'm4a']
+    const result = await dialog.showOpenDialog(win, { title: 'Add an audio file',
+      filters: [{ name: 'Audio', extensions: audioExtensions }], properties: ['openFile'] })
+    if (result.canceled) return { cancelled: true }
+    if (!audioExtensions.includes(extname(result.filePaths[0]).slice(1).toLowerCase())) return { error: 'badSource' }
+    const media = await projects.register(result.filePaths[0], false, true)
+    return media.audioOnly ? { media } : { error: 'badSource' }
   }, true)
   safeHandle('media-add', async () => {
     const result = await dialog.showOpenDialog(win, { title: 'Zaman çizelgesine video ekle',
@@ -522,7 +531,7 @@ async function startServer() {
 
 async function openEditor() {
   const profile = app.getPath('userData')
-  const previous = join(previousProfile, 'project-recovery-v18.viralcut')
+  const previous = [join(app.getPath('appData'), 'ViralCut AI Beta', 'project-recovery-beta.viralcut'), join(previousProfile, 'project-recovery-v18.viralcut')]
   ;[diagnostics, settings] = await Promise.all([createDiagnostics(profile), betaSettings(profile)])
   markClean = await startSessionMarker(profile, diagnostics.record)
   calendar = createCalendar(profile, previousProfile)
@@ -608,9 +617,9 @@ async function shutdown() {
   await markClean?.()
 }
 
-app.setAppUserModelId('com.viralcut.desktop.v18beta')
+app.setAppUserModelId('com.viralcut.desktop.v19')
 if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
-  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI Beta'))
+  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v19'))
 }
 if (!app.requestSingleInstanceLock()) app.quit()
 else {
