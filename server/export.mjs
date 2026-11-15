@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { setTimeout as delay } from 'node:timers/promises'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdtemp, readdir, rename, rmdir, stat, statfs, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -23,7 +24,7 @@ const prefix = 'viralcut-export-v3-'
 const tempFiles = ['input.mp4', 'input.webm', 'output.mp4', 'audio.wav', 'transcript.json', 'caption.ass', 'parts.txt',
   'layers.filters', 'v0-fx.cmd', 'v1-fx.cmd', 'v2-fx.cmd', 'v3-fx.cmd', 'v4-fx.cmd', 'v0-alpha.cmd', 'v1-alpha.cmd', 'v2-alpha.cmd', 'v3-alpha.cmd', 'v4-alpha.cmd', 'edge-a.mkv', 'edge-b.mkv', 'edge-caption-a.ass', 'edge-caption-b.ass', 'studio-picture.mkv', 'studio-sequence.mkv']
 
-async function removeWorkDir(directory) {
+async function removeWorkFiles(directory) {
   const parts = (await readdir(directory)).filter(name => /^part-\d{1,4}\.mkv$/.test(name))
   for (const name of [...tempFiles, ...parts]) {
     await unlink(join(directory, name)).catch(error => {
@@ -31,6 +32,18 @@ async function removeWorkDir(directory) {
     })
   }
   await rmdir(directory)
+}
+
+async function removeWorkDir(directory) {
+  for (let attempt=0; ;attempt++) {
+    try { await removeWorkFiles(directory); return }
+    catch (error) {
+      if (error.code==='ENOENT') return
+      // Windows can briefly retain handles after an FFmpeg or Whisper job exits.
+      if (attempt>=5 || !['EPERM','EACCES','EBUSY','ENOTEMPTY'].includes(error.code)) throw error
+      await delay(50*(attempt+1))
+    }
+  }
 }
 
 async function cleanAbandonedJobs() {
