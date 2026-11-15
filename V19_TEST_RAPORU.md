@@ -57,7 +57,8 @@ Kombinasyon testlerinde bilinen renkler ve ses frekansları üretildi. Bunlar ö
 - Bir proje 24 yol, 500 klip ve 24 saatle sınırlı. Aynı anda beş video ile sekiz ses kaynağı işlenebilir. Klip kenarlarını sürükleyerek kırpmak için yakınlaştır.
 - Birleşik önizleme render alır. Katmanlı gerçek zamanlı GPU kompozisyonu ve yeni proxy motoru bu dalın dışında. Eski kaynak proxy aracı kullanılabilir. Katmanlı önizleme, dışa aktarma bileşiminin kısa bir parçasını gösterir.
 - Eski geçişler, akıllı efektler ve AI iş akışları eski düzenleyici/araçlarında çalışır. Katmanlı kopyaya eski geçişler, efekt otomasyonu ve kelime zamanları aktarılmaz. Yeni altyazı/metin klipleri düz metin taşır ve görünüm proje stilinden gelir.
-- Yerel Setup ve Portable adayları imzasız. Windows 10 / 8 GB, kurulum/kaldırma, uzun süreli 4K, canlı YouTube hesabı ve zorlanmış yeni NVENC sürücü arızası bu v19 testinde doğrulanmadı.
+- Setup ve Portable EXE yerelde oluşturuldu. Paketler imzasız. Portable, Node ve FFmpeg PATH'ten çıkarılmış test ortamında açıldı, paket içi FFmpeg ile efekt önizledi, 1920 px yüksekliğinde kapak hazırladı ve kapanınca yerel servisi durdurdu. İş sırası bir çakışmayı yeniden denedi ve önizleme tamamlandı.
+- Windows 10 / 8 GB, Setup kurulum/kaldırma, uzun süreli 4K, canlı YouTube hesabı ve zorlanmış yeni NVENC sürücü arızası bu v19 testinde doğrulanmadı.
 - FFmpeg/FFprobe 9.0.2 Essentials GPL derlemesinin statik bağımlılıkları için eşleşen kaynak ve derleme malzemesi incelemesi açık. Yeni Windows Release yayımlanmadı. [Üçüncü taraf bildirimleri](THIRD_PARTY_NOTICES.md) · [FFmpeg lisans rehberi](https://ffmpeg.org/legal.html)
 
 ## Tekrarlama
