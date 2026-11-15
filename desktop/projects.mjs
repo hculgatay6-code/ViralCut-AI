@@ -7,6 +7,8 @@ import { validateEdit, validateProfile } from '../server/shorts.mjs'
 import { validateEffects, validateTransition } from '../server/effects.mjs'
 import { studioAudioSettings } from '../server/studio-audio.mjs'
 
+import { remapTimeline, timelineDocument } from '../server/timeline-document.mjs'
+
 const maxBytes = 8 * 1024 * 1024
 const uuid = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i
 const mediaTypes = { '.mp4': 'video/mp4', '.webm': 'video/webm' }
@@ -22,7 +24,7 @@ function requireValid(condition) {
 }
 
 export function projectDocument(data) {
-  requireValid(data?.version === 1 && Array.isArray(data.media) && data.media.length <= 100 &&
+  requireValid([1, 2].includes(data?.version) && Array.isArray(data.media) && data.media.length <= 100 &&
     Array.isArray(data.clips) && data.clips.length <= 500)
   const ids = new Set()
   const media = data.media.map(item => {
@@ -54,7 +56,8 @@ export function projectDocument(data) {
   const frame = data.frame === undefined ? undefined : validateEdit({ frame: data.frame }).frame
   const profile = validateProfile(data.profile)
   requireValid(profile && ['auto', 'cpu'].includes(data.encoder))
-  return { version: 1, media, clips, appearance, frame, profile, encoder: data.encoder, burn: data.burn !== false,
+  const timeline = data.version === 2 ? timelineDocument(data.timeline, id => ids.has(id)) : undefined
+  return { version: data.version, ...(timeline ? { timeline } : {}), media, clips, appearance, frame, profile, encoder: data.encoder, burn: data.burn !== false,
     mastering: studioAudioSettings(data.mastering) }
 }
 
@@ -152,6 +155,7 @@ export function createProjectStore(recoveryFile, previousRelease) {
     }
     const ids = new Map(media.map((item, index) => [document.media[index].id, item.id]))
     return { ...document, media,
+      ...(document.timeline ? { timeline: remapTimeline(document.timeline, ids) } : {}),
       clips: document.clips.map(clip => ({ ...clip, mediaId: ids.get(clip.mediaId) })) }
   }
 

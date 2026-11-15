@@ -3,12 +3,15 @@ import type { Frame } from '../editor/shorts'
 import type { Appearance, Cue } from '../subtitles/model'
 import type { StudioEffects, StudioTransition } from '../editor/effects'
 
+import type { LayerTimeline } from './layer-model'
+
 export interface Profile { resolution: 720 | 1080; fps: 24 | 25 | 30 | 50 | 60; quality: 'quality' | 'balanced' | 'small'; bitrate: number }
 export const defaultProfile: Profile = { resolution: 1080, fps: 30, quality: 'balanced', bitrate: 0 }
 export interface ProjectMedia { id: string; name: string; size: number; missing: boolean; cues: Cue[] }
 export interface ProjectClip extends ClipRange { id: string; mediaId: string; muteAudio?: boolean; effects?: StudioEffects; transition?: StudioTransition }
 export interface Project {
-  version: 1
+  version: 1 | 2
+  timeline?: LayerTimeline
   media: ProjectMedia[]
   clips: ProjectClip[]
   appearance: Appearance
