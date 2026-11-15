@@ -531,7 +531,7 @@ async function startServer() {
 
 async function openEditor() {
   const profile = app.getPath('userData')
-  const previous = [join(app.getPath('appData'), 'ViralCut AI Beta', 'project-recovery-beta.viralcut'), join(previousProfile, 'project-recovery-v18.viralcut')]
+  const previous = [join(app.getPath('appData'), 'ViralCut AI v19', 'project-recovery-beta.viralcut'), join(app.getPath('appData'), 'ViralCut AI Beta', 'project-recovery-beta.viralcut'), join(previousProfile, 'project-recovery-v18.viralcut')]
   ;[diagnostics, settings] = await Promise.all([createDiagnostics(profile), betaSettings(profile)])
   markClean = await startSessionMarker(profile, diagnostics.record)
   calendar = createCalendar(profile, previousProfile)
@@ -617,9 +617,9 @@ async function shutdown() {
   await markClean?.()
 }
 
-app.setAppUserModelId('com.viralcut.desktop.v19')
+app.setAppUserModelId('com.viralcut.desktop.v20')
 if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
-  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v19'))
+  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v20'))
 }
 if (!app.requestSingleInstanceLock()) app.quit()
 else {

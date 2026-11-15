@@ -21,7 +21,7 @@ import { analysisKey } from './analysis-cache.mjs'
 const idleLimit = 30 * 60 * 1000
 const prefix = 'viralcut-export-v3-'
 const tempFiles = ['input.mp4', 'input.webm', 'output.mp4', 'audio.wav', 'transcript.json', 'caption.ass', 'parts.txt',
-  'edge-a.mkv', 'edge-b.mkv', 'edge-caption-a.ass', 'edge-caption-b.ass', 'studio-picture.mkv', 'studio-sequence.mkv']
+  'layers.filters', 'v0-alpha.cmd', 'v1-alpha.cmd', 'v2-alpha.cmd', 'v3-alpha.cmd', 'v4-alpha.cmd', 'edge-a.mkv', 'edge-b.mkv', 'edge-caption-a.ass', 'edge-caption-b.ass', 'studio-picture.mkv', 'studio-sequence.mkv']
 
 async function removeWorkDir(directory) {
   const parts = (await readdir(directory)).filter(name => /^part-\d{1,4}\.mkv$/.test(name))
@@ -175,7 +175,7 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
         directory: job.directory, language: job.language, device: job.device, overlay: job.overlay,
         analysis: job.analysis, edit: job.edit, effects: job.effects,
         semantic, vision, goal: job.goal, duration: job.duration, visualMode: job.visualMode, visualDevice: job.visualDevice, director: job.director,
-        parts: job.parts, spans: job.spans, titles: job.titles, frame: job.frame, profile: job.profile, encoder: job.encoder, mastering: job.mastering,
+        parts: job.parts, spans: job.spans, animatedCaptions: job.animatedCaptions, titles: job.titles, frame: job.frame, profile: job.profile, encoder: job.encoder, mastering: job.mastering,
         signal: job.controller.signal,
         onStage: stage => { job.stage = stage },
         onProgress: progress => { job.progress = Math.max(job.progress, progress) },

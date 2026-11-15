@@ -119,3 +119,18 @@ export function sliceAnimation(animation, offset, length) {
     })]
   }))
 }
+
+export function joinAnimation(left, right, length) {
+  if (!left && !right) return undefined
+  const channels = Object.keys(left ?? {})
+  if (!left || !right || channels.length !== Object.keys(right).length || channels.some(key => !right[key])) return null
+  return Object.fromEntries(channels.map(key => {
+    const a = left[key], b = right[key]
+    // Before the first key and after the last key, each source clip holds that value.
+    // Preserve both sides as a hard boundary in the joined clip.
+    const outgoing = { frame: a.at(-1).frame, value: a.at(-1).value, curve: 'hold' }
+    const next = b.map(point => ({ ...point, frame: point.frame + length }))
+    if (b[0].frame) next.unshift({ frame: length, value: b[0].value, curve: 'hold' })
+    return [key, [...a.slice(0, -1), outgoing, ...next]]
+  }))
+}

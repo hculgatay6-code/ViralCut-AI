@@ -12,3 +12,4 @@ export function keyframeDocument(animation: unknown, kind: string, length: numbe
 export function curveValue(progress: number, curve: Curve, bezier?: Bezier): number
 export function keyframeValue(points: Keyframe[] | undefined, frame: number, fallback: number): number
 export function sliceAnimation(animation: Animation | undefined, offset: number, length: number): Animation | undefined
+export function joinAnimation(left: Animation | undefined, right: Animation | undefined, length: number): Animation | undefined | null

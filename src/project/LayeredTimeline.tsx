@@ -1,9 +1,11 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { Copy } from '../i18n'
 import type { Project, ProjectMedia, Waveform } from './model'
 import { LayerOutput } from './LayerOutput'
+import { sliceAnimation } from '../../server/keyframes.mjs'
+import type { Animation } from '../../server/keyframes.mjs'
 import { useLayerThumbnails } from './layer-thumbnails'
 import { addLayerClips, changeGap, deleteSelection, emptyTrack, frameCode, layerDuration, mediaClip,
   mergeLayerClip, moveSelection, putLayerClip, selectedClips, snapFrame, splitLayerClip, updateTrack } from './layer-model'
@@ -16,7 +18,17 @@ type Props = {
   change: (apply: (project: Project) => Project) => void
   waveforms?: Record<string, Waveform>; stop: () => void
 }
+const AnimationStudio = lazy(() => import('./AnimationStudio').then(module => ({ default: module.AnimationStudio })))
 const empty = new Set<string>()
+function visibleKeyframes(clip: TimelineClip, scale: number, start: number, end: number) {
+  const positions = new Map<number, number>()
+  for (const points of Object.values(clip.animation ?? {})) for (const { frame } of points) {
+    const x = (clip.at + frame) * scale
+    if (x >= start && x <= end) positions.set(Math.round(x / 4), frame)
+  }
+  return [...positions.values()]
+}
+
 const kindLabels = { video: ['Video', 'Video'], audio: ['Ses', 'Audio'], caption: ['Altyazı', 'Captions'], text: ['Metin', 'Text'] }
 const prefix = { video: 'V', audio: 'A', caption: 'CC', text: 'T' }
 
@@ -80,7 +92,8 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
   const [wave, setWave] = useState<Record<string, Waveform>>({})
   const sourceLengths = useRef(new Map<string, number>())
   const clipboard = useRef<ClipSelection>([])
-  const drag = useRef<{ id: string; ids: ReadonlySet<string>; frame: number; x: number; y: number; scroll: number; edge?: 'start' | 'end' } | null>(null)
+  const animationClipboard = useRef<Animation>(undefined)
+  const drag = useRef<{ id: string; ids: ReadonlySet<string>; frame: number; x: number; y: number; scroll: number; key?: number; edge?: 'start' | 'end' } | null>(null)
   const scroll = useRef<HTMLDivElement>(null)
   const [viewport, setViewport] = useState({ left: 0, width: 1100 })
   const thumbnail = useLayerThumbnails(scroll, project.media)
@@ -128,7 +141,8 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
       return false
     }
     setNotice('')
-    change(current => current.timeline === timeline ? { ...current, timeline: next } : current)
+    const version = next.tracks.some(row => row.clips.some(item => item.animation)) ? 3 : project.version
+    change(current => current.timeline === timeline ? { ...current, version, timeline: next } : current)
     return true
   }
 
@@ -198,6 +212,11 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
   }
 
   async function trim(row: Track, clip: TimelineClip, mode: boolean) {
+    const old = row.clips.find(item => item.id === clip.id)
+    if (old?.animation && clip.length >= 1) {
+      const offset = (clip.inFrame ?? clip.at) - (old.inFrame ?? old.at)
+      clip = { ...clip, animation: sliceAnimation(old.animation, offset, clip.length) }
+    }
     const media = sourceMap.get(clip.mediaId ?? '')
     if (media && !media.missing && clip.inFrame !== undefined) {
       try {
@@ -230,16 +249,18 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
     setTrackId(row.id); setSelection(ids)
     if (row.locked || multi || adding) return
     event.currentTarget.setPointerCapture(event.pointerId)
+    const marker=event.target instanceof HTMLElement ? event.target.dataset.keyframe : undefined
+    if (marker !== undefined) setAt(clip.at+Number(marker))
     const bounds = event.currentTarget.getBoundingClientRect()
     const edge = bounds.width > 24 ? event.clientX - bounds.left < 7 ? 'start' :
       bounds.right - event.clientX < 7 ? 'end' : undefined : undefined
     drag.current = { id: clip.id, ids, frame: edge === 'end' ? clip.at + clip.length : clip.at,
-      x: event.clientX, y: event.clientY, scroll: scroll.current?.scrollLeft ?? 0, edge }
+      x: event.clientX, y: event.clientY, scroll: scroll.current?.scrollLeft ?? 0, edge, key:marker===undefined ? undefined : Number(marker) }
   }
 
   function dragMove(event: PointerEvent<HTMLButtonElement>) {
     const start = drag.current
-    if (start && !start.edge) setDragOffset(Math.round(event.clientX - start.x + (scroll.current?.scrollLeft ?? 0) - start.scroll))
+    if (start && !start.edge && start.key===undefined) setDragOffset(Math.round(event.clientX - start.x + (scroll.current?.scrollLeft ?? 0) - start.scroll))
   }
 
   function dragFinish(event: PointerEvent<HTMLButtonElement>) {
@@ -251,6 +272,24 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
     const nearest = snap ? snapFrame(timeline, raw, at, Math.min(fps / 3, 9 / scale), new Set(origin.ids)) : Math.max(0, Math.round(raw))
     const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-layer-row]')?.dataset.layerRow
     const source = timeline.tracks.find(track => track.clips.some(clip => clip.id === origin.id))
+    if (origin.key !== undefined) {
+      const clip=source?.clips.find(item=>item.id===origin.id)
+      if (!source||!clip?.animation) return
+      const key=origin.key
+      const step=Math.round((event.clientX-origin.x+(scroll.current?.scrollLeft??0)-origin.scroll)/scale)
+      const frame=Math.max(0,Math.min(clip.length-1,key+step))
+      if (frame===key) return
+      const animation: Animation={}
+      for (const [channel,points] of Object.entries(clip.animation)) {
+        if (points.some(point=>point.frame===key) && points.some(point=>point.frame===frame)) {
+          setNotice(t('Bu karede zaten bir anahtar kare var.','A keyframe already occupies that frame.'))
+          return
+        }
+        animation[channel as keyof Animation]=points.map(point=>point.frame===key?{...point,frame}:point).sort((a,b)=>a.frame-b.frame)
+      }
+      if (commit(putLayerClip(timeline,source.id,{...clip,animation}))) setAt(clip.at+frame)
+      return
+    }
     if (origin.edge) {
       const clip = source?.clips.find(item => item.id === origin.id)
       if (!source || !clip) return
@@ -302,7 +341,12 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
     }} />{t('Altyazı ve metni işle', 'Burn captions and text')}</label>
   </fieldset>
 
-  const properties = <section className="panel layer-properties">
+  const properties = <>
+  {active && <Suspense fallback={null}><AnimationStudio key={active.clip.id} clip={active.clip} kind={active.track.kind} at={at} fps={fps}
+    tr={tr} locked={active.track.locked} seek={setAt} clipboard={animationClipboard}
+    cues={sourceMap.get(active.clip.mediaId ?? '')?.cues}
+    apply={animation => commit(putLayerClip(timeline, active.track.id, { ...active.clip, animation }))} /></Suspense>}
+  <section className="panel layer-properties">
     <header className="panel-header"><h2>{t('Katman ve klip ayarları', 'Track and clip settings')}</h2></header>
     {track && <div className="layer-properties-body">
       <label>{t('Katman adı', 'Track name')}<input key={track.id + track.name} defaultValue={track.name} maxLength={60}
@@ -344,7 +388,7 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
       </fieldset>}
     </div>}
     <div className="layer-properties-body">{settings}</div>
-  </section>
+  </section></>
 
   const windowStart = Math.max(0, viewport.left - 240)
   const windowEnd = viewport.left + viewport.width + 240
@@ -455,6 +499,10 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
                     data-source={clip.mediaId} data-time={clip.inFrame! / fps} />}
                 {row.kind === 'audio' && waveform && <Wave waveform={waveform} inFrame={clip.inFrame!} length={clip.length} fps={fps} />}
                 <span>{label}</span>
+                {clip.animation && <span className="keyframe-markers" aria-hidden="true">
+                  {visibleKeyframes(clip, scale, windowStart, windowEnd).map(frame =>
+                    <i key={frame} data-keyframe={frame} title={t('Anahtar kare','Keyframe')+' '+frame} style={{left:frame/clip.length*100+'%'}} />)}
+                </span>}
                 {clip.length * scale > 24 && !row.locked && <><i className="layer-trim start" /><i className="layer-trim end" /></>}
               </button>
             })}

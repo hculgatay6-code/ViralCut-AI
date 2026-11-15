@@ -1,5 +1,5 @@
 import type { Project } from './model'
-import { keyframeLimits, sliceAnimation } from '../../server/keyframes.mjs'
+import { joinAnimation, keyframeLimits, sliceAnimation } from '../../server/keyframes.mjs'
 import type { Animation } from '../../server/keyframes.mjs'
 
 export type TrackKind = 'video' | 'audio' | 'caption' | 'text'
@@ -166,11 +166,13 @@ export function splitLayerClip(timeline: LayerTimeline, track: Track, clip: Time
 
 export function mergeLayerClip(timeline: LayerTimeline, track: Track, clip: TimelineClip) {
   const next = track.clips.find(item => item.at === clip.at + clip.length)
-  if (!next || clip.animation || next.animation || next.mediaId !== clip.mediaId || next.text !== clip.text || next.scale !== clip.scale ||
+  if (!next || next.mediaId !== clip.mediaId || next.text !== clip.text || next.scale !== clip.scale ||
       next.x !== clip.x || next.y !== clip.y || next.opacity !== clip.opacity ||
       (clip.inFrame !== undefined && next.inFrame !== clip.inFrame + clip.length)) return null
+  const animation = joinAnimation(clip.animation, next.animation, clip.length)
+  if (animation === null) return null
   return withClips(timeline, new Map([[track.id, track.clips.filter(item => item.id !== next.id).map(item =>
-    item.id === clip.id ? { ...clip, length: clip.length + next.length } : item)]]))
+    item.id === clip.id ? { ...clip, length: clip.length + next.length, ...(animation ? { animation } : {}) } : item)]]))
 }
 
 export function changeGap(timeline: LayerTimeline, track: Track, at: number, delta: number) {

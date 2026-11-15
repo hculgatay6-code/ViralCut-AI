@@ -1,5 +1,6 @@
 import { stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { animatedVideo, animationExpression } from './animation-render.mjs'
 import { buildAss, validateOverlay } from './ass.mjs'
 import { encoderArgs, ExportError, inputOptions, probe, run } from './media.mjs'
 import { outputSize, validateEdit, validateProfile } from './shorts.mjs'
@@ -29,7 +30,7 @@ export function validateLayeredSequence(settings, resolveMedia) {
     return track.clips.filter(clip => clip.at < to && clip.at + clip.length > from).flatMap(clip => {
       if (track.kind === 'caption' || track.kind === 'text') {
         if (settings.burn !== false) captions.push({ start: clip.at / timeline.fps, end: (clip.at + clip.length) / timeline.fps,
-          text: clip.text, title: track.kind === 'text' })
+          text: clip.text, animation: clip.animation, title: track.kind === 'text' })
         return []
       }
       let source = sources.get(clip.mediaId)
@@ -46,7 +47,15 @@ export function validateLayeredSequence(settings, resolveMedia) {
   const title = captions.filter(cue => cue.title)
   const overlay = caption.length ? validateOverlay({ cues: caption, appearance }) : undefined
   const titles = title.length ? validateOverlay({ cues: title, appearance: { ...appearance, position: 'top', safe: true, y: 16 } }) : undefined
+  const animatedCaptions = new Map(captions.filter(cue => cue.animation).map(cue => [cue, cue.animation]))
   const edges = new Set([from, to])
+  const shortBlocks = [...visible.filter(clip => clip.animation?.opacity?.length > 1).map(clip => [clip.at, clip.at + clip.length]),
+    ...[...animatedCaptions.keys()].map(cue => [Math.round(cue.start * timeline.fps), Math.round(cue.end * timeline.fps)])]
+  for (const [start, end] of shortBlocks) {
+    const step = 30 * timeline.fps
+    // Global boundaries coalesce coincident animations and bound ASS/sendcmd storage.
+    for (let at = (Math.floor(Math.max(from, start) / step) + 1) * step; at < Math.min(to, end); at += step) edges.add(at)
+  }
   for (const clip of visible) {
     edges.add(Math.max(from, clip.at))
     edges.add(Math.min(to, clip.at + clip.length))
@@ -59,17 +68,18 @@ export function validateLayeredSequence(settings, resolveMedia) {
         clips.filter(clip => clip.kind === 'audio').length > layerLimits.audio) throw new ExportError('layerConcurrency', 400)
     return { start, end, clips }
   })
-  return { kind: 'sequence', monitor: preview !== undefined, spans, profile, frame, encoder, overlay, titles }
+  return { kind: 'sequence', monitor: preview !== undefined, spans, profile, frame, encoder, overlay, titles, animatedCaptions }
 }
 
 function dimensions(value) { return Math.max(2, Math.round(value / 2) * 2) }
 
-export async function encodeLayeredSequence({ spans, profile, frame, encoder, overlay, titles, directory, output, signal, onProgress }) {
+export async function encodeLayeredSequence({ spans, profile, frame, encoder, overlay, titles, animatedCaptions, directory, output, signal, onProgress }) {
   const fps = profile.fps
   const [width, height] = outputSize(frame, profile)
   const total = (spans.at(-1).end - spans[0].start) / fps
   const files = spans.map((_, index) => 'part-' + index + '.mkv')
-  const cleanup = () => Promise.all([...files, 'parts.txt', 'caption.ass', 'edge-caption-a.ass']
+  const scratch = ['layers.filters', ...Array.from({ length: layerLimits.video }, (_, i) => 'v' + i + '-alpha.cmd')]
+  const cleanup = () => Promise.all([...files, ...scratch, 'parts.txt', 'caption.ass', 'edge-caption-a.ass']
     .map(name => unlink(join(directory, name)).catch(() => {})))
   const media = new Map()
   for (const { clips } of spans) for (const clip of clips) {
@@ -128,6 +138,14 @@ export async function encodeLayeredSequence({ spans, profile, frame, encoder, ov
       filters.push(`color=c=black:s=${width}x${height}:r=${fps}:d=${sec}[bg]`)
       let under = 'bg'
       for (const { clip, label } of videos) {
+        if (clip.animation) {
+          const { foreground, composite, alpha } = animatedVideo(clip, label, under, width, height, fps, start, end - start,
+            media.get(clip.path).streams.find(stream => stream.codec_type === 'video' && stream.width && !stream.disposition?.attached_pic))
+          if (alpha.length) await writeFile(join(directory, label + '-alpha.cmd'), alpha.join('\n'))
+          filters.push(foreground, composite)
+          under = label + 'out'
+          continue
+        }
         filters.push(`[${label}in]fps=${fps}:start_time=0,` +
           `scale=${dimensions(width * clip.scale)}:${dimensions(height * clip.scale)}:force_original_aspect_ratio=decrease:force_divisible_by=2:reset_sar=1,` +
           `setsar=1,format=rgba,colorchannelmixer=aa=${clip.opacity},tpad=stop_mode=clone:stop_duration=0.15[${label}fg]`)
@@ -137,18 +155,24 @@ export async function encodeLayeredSequence({ spans, profile, frame, encoder, ov
       const captionFilters = []
       for (const [text, filename] of [[overlay, 'caption.ass'], [titles, 'edge-caption-a.ass']]) {
         if (!text?.cues.some(cue => cue.start < end / fps && cue.end > start / fps)) continue
-        await writeFile(join(directory, filename), buildAss(text, start / fps, end / fps, frame))
+        await writeFile(join(directory, filename), buildAss(text, start / fps, end / fps, frame, start / fps, { fps, channels: animatedCaptions ?? new Map() }))
         captionFilters.push('ass=' + filename)
       }
       filters.push(`[${under}]${[...captionFilters, 'format=yuv420p', 'setsar=1'].join(',')}[picture]`)
-      for (const { clip, label } of audios) filters.push(`[${label}in]aresample=48000:first_pts=0,` +
-        `aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${clip.gain},apad,atrim=duration=${sec}[${label}out]`)
+      for (const { clip, label } of audios) {
+        const volume = clip.animation?.volume
+        const gain = volume ? `asetnsamples=n=${48000 / fps}:p=0,volume='if(isnan(t),1,(${animationExpression(volume, start - clip.at, `round(t*${fps})`, 1)}))*${clip.gain}':eval=frame`
+          : 'volume=' + clip.gain
+        filters.push(`[${label}in]aresample=48000:first_pts=0,` +
+        `aformat=sample_fmts=fltp:channel_layouts=stereo,${gain},apad,atrim=duration=${sec}[${label}out]`)
+      }
       filters.push(audios.length
         ? audios.map(({ label }) => `[${label}out]`).join('') +
           `amix=inputs=${audios.length}:normalize=0,alimiter=limit=0.95:level=0:latency=1[mix]`
         : `anullsrc=r=48000:cl=stereo,atrim=duration=${sec}[mix]`)
+      await writeFile(join(directory, 'layers.filters'), filters.join(';'))
       await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-n', '-xerror',
-        '-progress', 'pipe:1', '-stats_period', '0.25', ...input, '-filter_complex_threads', '2', '-filter_complex', filters.join(';'),
+        '-progress', 'pipe:1', '-stats_period', '0.25', ...input, '-filter_complex_threads', '2', '-/filter_complex', 'layers.filters',
         '-t', sec, '-map', '[picture]', '-map', '[mix]', '-map_metadata', '-1', '-map_chapters', '-1',
         ...encoderArgs(gpu, profile), '-bf', '0', '-c:a', 'pcm_s16le', '-f', 'matroska', files[index]], signal, line => {
         if (!line.startsWith('out_time_us=')) return

@@ -61,7 +61,7 @@ export function inputOptions(format) {
 export async function probe(file, format, signal) {
   return JSON.parse(await run('ffprobe', [
     '-v', 'error', ...inputOptions(format), '-show_entries',
-    'format=duration:stream=codec_type,width,height,codec_name,avg_frame_rate,nb_frames,duration:stream_disposition=attached_pic',
+    'format=duration:stream=codec_type,width,height,codec_name,avg_frame_rate,nb_frames,duration,sample_aspect_ratio:stream_disposition=attached_pic:stream_side_data=rotation',
     '-of', 'json', '-i', file,
   ], AbortSignal.any([signal, AbortSignal.timeout(45000)])))
 }

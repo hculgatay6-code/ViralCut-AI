@@ -1,4 +1,5 @@
 import { ExportError } from './media.mjs'
+import { keyframeValue } from './keyframes.mjs'
 import { captionMotion, captionParts, captionY, hasReliableWords, highlights, motions } from './caption-design.mjs'
 
 const fonts = { arial: 'Arial', segoe: 'Segoe UI', verdana: 'Verdana' }
@@ -56,7 +57,7 @@ function timestamp(ticks) {
     '.' + String(ticks % 100).padStart(2, '0')
 }
 
-export function buildAss({ cues, appearance }, start, end, frame, visibleFrom = start) {
+export function buildAss({ cues, appearance }, start, end, frame, visibleFrom = start, animated) {
   const [bold, border, outline] = styles[appearance.style]
   const primary = assColor(appearance.textColor)
   const accent = assColor(appearance.highlightColor)
@@ -68,13 +69,40 @@ export function buildAss({ cues, appearance }, start, end, frame, visibleFrom = 
   const events = []
   for (const cue of cues) {
     let cursor = Math.round((Math.max(cue.start, visibleFrom) - start) * 100)
-    const last = Math.round((Math.min(cue.end, end) - start) * 100)
+    let last = Math.round((Math.min(cue.end, end) - start) * 100)
     if (cursor >= last) continue
     function event(until, text) {
       const stop = Math.min(last, until)
       if (stop <= cursor) return
       events.push('Dialogue: 0,' + timestamp(cursor) + ',' + timestamp(stop) + ',Caption,,0,0,0,,' + text)
       cursor = stop
+    }
+    const animation = animated?.channels.get(cue)
+    if (animation) {
+      const fps = animated.fps
+      const first = Math.round(Math.max(cue.start, visibleFrom) * fps)
+      const final = Math.round(Math.min(cue.end, end) * fps)
+      const origin = Math.round(cue.start * fps)
+      const window = Math.round(start * fps)
+      const tick = frame => Math.floor((frame - window) * 100 / fps)
+      cursor = tick(first)
+      last = tick(final)
+      const baseY = (safe ? captionY(appearance) / 100 : ({ top: .12, middle: .5, bottom: .86 })[appearance.position])
+      const glyphs = [...new Intl.Segmenter().segment(cue.text)].map(item => item.segment)
+      let previous
+      for (let frame = first; frame < final; frame++) {
+        const sample = (key, fallback) => keyframeValue(animation[key], frame - origin, fallback)
+        const x = Math.round(width * sample('x', .5)), y = Math.round(1080 * sample('y', baseY))
+        const scale = Math.round(sample('scale', 1) * 10000) / 100
+        const turn = Math.round(sample('rotation', 0) * 100) / 100
+        const alpha = Math.round((1 - sample('opacity', 1)) * 255).toString(16).padStart(2, '0')
+        const text = assText(glyphs.slice(0, Math.ceil(glyphs.length * sample('reveal', 1))).join(''))
+        const next = '{\\an5\\pos(' + x + ',' + y + ')\\fscx' + scale + '\\fscy' + scale + '\\frz' + (-turn) + '\\alpha&H' + alpha + '&}' + text
+        if (previous !== undefined && next !== previous) event(tick(frame), previous)
+        previous = next
+      }
+      if (previous !== undefined) event(last, previous)
+      continue
     }
     const plain = assText(cue.text)
     if (safe || appearance.motion !== undefined || appearance.highlightMode !== undefined) {

@@ -67,7 +67,7 @@ export function App() {
   const desktop = !!window.viralCutDesktop
   const [studioTab, setStudioTab] = useState<'media' | 'subtitles' | 'audio' | 'ai' | 'effects' | 'cover' | 'director' | 'performance' | 'copilot' | 'creator' | 'settings'>('media')
   const [beta, setBeta] = useState<BetaPreferences>()
-  const [version, setVersion] = useState('19.0.0')
+  const [version, setVersion] = useState('20.0.0')
   const [creatorIntent, setCreatorIntent] = useState<CreatorIntent>()
   const [copilotProject, setCopilotProject] = useState(0)
   const [safeGuides, setSafeGuides] = useState(false)
