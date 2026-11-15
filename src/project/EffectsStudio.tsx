@@ -144,7 +144,7 @@ export function EffectsStudio({clip,fps,at,tr,locked,adjacent,apply,clipboard,li
         }}><option value="">{t('Yok','None')}</option>
           {transitions.map(([id,en,tk])=><option key={id} value={id}>{tr?tk:en}</option>)}</select></label>
         {incoming&&<>
-          <label>{t('Yön','Direction')}<select value={incoming.direction} onChange={event=>updateTransition({direction:event.target.value})}>
+          <label>{t('Yön','Direction')}<select disabled={!['wipe','slide','push'].includes(incoming.id)} value={incoming.direction} onChange={event=>updateTransition({direction:event.target.value})}>
             {directions.map((direction,i)=><option key={direction} value={direction}>{tr?['Sol','Sağ','Yukarı','Aşağı'][i]:direction}</option>)}
           </select></label>
           <div className="layer-properties-grid">

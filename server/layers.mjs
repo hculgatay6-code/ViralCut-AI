@@ -47,9 +47,9 @@ export function validateLayeredSequence(settings, resolveMedia) {
       }
       const current=resolve(clip)
       const spec=clip.incoming
-      if (!spec || clip.at+spec.start>=to || clip.at+spec.start+spec.length<=from) return [current]
+      if (!spec || clip.at+spec.start+spec.length<=from) return [current]
       const prior=resolve(track.clips[index-1])
-      return [current,{ ...prior, incoming:undefined, outgoing:true, rangeStart:clip.at+spec.start, rangeEnd:clip.at+spec.start+spec.length }]
+      return [current,{ ...prior, incoming:undefined, outgoing:true, rangeStart:clip.at, rangeEnd:clip.at+spec.start+spec.length }]
     })
   })
   const caption = captions.filter(cue => !cue.title)

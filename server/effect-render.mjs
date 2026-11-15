@@ -93,7 +93,7 @@ export function transitionFilter(spec, elapsed, fps, old, fresh, output, lower) 
   }
   if (spec.id==='fade') {
     const middle=output+'under'
-    return `[${old}][${lower}]blend=all_expr='st(9,min(1,2*(${progress})));A*(1-ld(9))+B*ld(9)'[${middle}];[${middle}][${fresh}]blend=all_expr='st(9,max(0,2*(${progress})-1));A*(1-ld(9))+B*ld(9)'[${output}]`
+    return `[${old}][${lower}]blend=all_expr='st(9,min(1,2*(${easing})));A*(1-ld(9))+B*ld(9)'[${middle}];[${middle}][${fresh}]blend=all_expr='st(9,max(0,2*(${easing})-1));A*(1-ld(9))+B*ld(9)'[${output}]`
   }
   if (spec.id==='pixel') expression=`if(lte(ld(9),0),A,if(lte(mod(floor(X/${i(4+spec.amount*22)})*31+floor(Y/${i(4+spec.amount*22)})*17,97)/97,ld(9)),B,A))`
   if (['black','white','flash'].includes(spec.id)) {
