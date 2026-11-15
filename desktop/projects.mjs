@@ -24,7 +24,7 @@ function requireValid(condition) {
 }
 
 export function projectDocument(data) {
-  requireValid([1, 2].includes(data?.version) && Array.isArray(data.media) && data.media.length <= 100 &&
+  requireValid([1, 2, 3].includes(data?.version) && Array.isArray(data.media) && data.media.length <= 100 &&
     Array.isArray(data.clips) && data.clips.length <= 500)
   const ids = new Set()
   const audio = new Set()
@@ -58,7 +58,8 @@ export function projectDocument(data) {
   const frame = data.frame === undefined ? undefined : validateEdit({ frame: data.frame }).frame
   const profile = validateProfile(data.profile)
   requireValid(profile && ['auto', 'cpu'].includes(data.encoder))
-  const timeline = data.version === 2 ? timelineDocument(data.timeline, (id, kind) => ids.has(id) && (kind === 'audio' || !audio.has(id))) : undefined
+  const timeline = data.version >= 2 ? timelineDocument(data.timeline, (id, kind) => ids.has(id) && (kind === 'audio' || !audio.has(id))) : undefined
+  requireValid(data.version === 3 || !timeline?.tracks.some(track => track.clips.some(clip => clip.animation)))
   return { version: data.version, ...(timeline ? { timeline } : {}), media, clips, appearance, frame, profile, encoder: data.encoder, burn: data.burn !== false,
     mastering: studioAudioSettings(data.mastering) }
 }

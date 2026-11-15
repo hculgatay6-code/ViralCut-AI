@@ -1,3 +1,5 @@
+import { keyframeDocument, keyframeLimits } from './keyframes.mjs'
+
 const kinds = ['video', 'audio', 'caption', 'text']
 const frameRates = [24, 25, 30, 50, 60]
 const idPattern = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i
@@ -15,6 +17,7 @@ export function timelineDocument(value, hasMedia) {
   const max = value.fps * layerLimits.seconds
   const ids = new Set()
   let count = 0
+  let keyframes = 0
   function identifier(id) {
     requireValid(typeof id === 'string' && idPattern.test(id) && !ids.has(id))
     ids.add(id)
@@ -31,7 +34,10 @@ export function timelineDocument(value, hasMedia) {
     const clips = track.clips.map(clip => {
       requireValid(clip && [clip.at, clip.length].every(Number.isSafeInteger) &&
         clip.at >= 0 && clip.length >= 1 && clip.at + clip.length <= max)
-      const base = { id: identifier(clip.id), at: clip.at, length: clip.length }
+      const animation = keyframeDocument(clip.animation, kind, clip.length)
+      for (const points of Object.values(animation ?? {})) keyframes += points.length
+      requireValid(keyframes <= keyframeLimits.project)
+      const base = { id: identifier(clip.id), at: clip.at, length: clip.length, ...(animation ? { animation } : {}) }
       if (kind === 'caption' || kind === 'text') {
         requireValid(typeof clip.text === 'string' && clip.text.trim() && clip.text.length <= 500)
         return { ...base, text: clip.text }

@@ -1,8 +1,10 @@
 import type { Project } from './model'
+import { keyframeLimits, sliceAnimation } from '../../server/keyframes.mjs'
+import type { Animation } from '../../server/keyframes.mjs'
 
 export type TrackKind = 'video' | 'audio' | 'caption' | 'text'
 export type TimelineClip = { id: string; at: number; length: number; mediaId?: string; inFrame?: number
-  text?: string; x?: number; y?: number; scale?: number; opacity?: number }
+  text?: string; x?: number; y?: number; scale?: number; opacity?: number; animation?: Animation }
 export type Track = { id: string; kind: TrackKind; name: string; locked: boolean; hidden: boolean
   muted: boolean; solo: boolean; gain: number; clips: TimelineClip[] }
 export type LayerTimeline = { fps: Project['profile']['fps']; tracks: Track[] }
@@ -67,6 +69,12 @@ function withClips(timeline: LayerTimeline, changes: Map<string, TimelineClip[]>
     return clips ? { ...track, clips: [...clips].sort((a, b) => a.at - b.at) } : track
   })
   if (tracks.reduce((sum, track) => sum + track.clips.length, 0) > limit) return null
+  let points = 0
+  for (const track of tracks) for (const clip of track.clips) for (const channel of Object.values(clip.animation ?? {})) {
+    if (channel.length > keyframeLimits.channel || channel.at(-1)!.frame >= clip.length) return null
+    points += channel.length
+  }
+  if (points > keyframeLimits.project) return null
   for (const track of tracks) {
     if (!changes.has(track.id)) continue
     if (track.locked || track.clips.some((clip, i) =>
@@ -150,15 +158,15 @@ export function deleteSelection(timeline: LayerTimeline, ids: ReadonlySet<string
 export function splitLayerClip(timeline: LayerTimeline, track: Track, clip: TimelineClip, at: number) {
   const length = at - clip.at
   if (length <= 0 || length >= clip.length) return null
-  const right = { ...clip, id: crypto.randomUUID(), at, length: clip.length - length,
+  const right = { ...clip, ...(clip.animation ? { animation: sliceAnimation(clip.animation, length, clip.length - length) } : {}), id: crypto.randomUUID(), at, length: clip.length - length,
     ...(clip.inFrame === undefined ? {} : { inFrame: clip.inFrame + length }) }
   return withClips(timeline, new Map([[track.id, track.clips.flatMap(item =>
-    item.id === clip.id ? [{ ...clip, length }, right] : [item])]]))
+    item.id === clip.id ? [{ ...clip, length, ...(clip.animation ? { animation: sliceAnimation(clip.animation, 0, length) } : {}) }, right] : [item])]]))
 }
 
 export function mergeLayerClip(timeline: LayerTimeline, track: Track, clip: TimelineClip) {
   const next = track.clips.find(item => item.at === clip.at + clip.length)
-  if (!next || next.mediaId !== clip.mediaId || next.text !== clip.text || next.scale !== clip.scale ||
+  if (!next || clip.animation || next.animation || next.mediaId !== clip.mediaId || next.text !== clip.text || next.scale !== clip.scale ||
       next.x !== clip.x || next.y !== clip.y || next.opacity !== clip.opacity ||
       (clip.inFrame !== undefined && next.inFrame !== clip.inFrame + clip.length)) return null
   return withClips(timeline, new Map([[track.id, track.clips.filter(item => item.id !== next.id).map(item =>
