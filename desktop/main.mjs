@@ -528,7 +528,10 @@ async function openEditor() {
   calendar = createCalendar(profile, previousProfile)
   youtube = createYouTube({ folder: profile, storage: safeStorage, openBrowser: shell.openExternal })
   configureTools()
-  const [tools, speech] = await Promise.all([checkTools({ subtitles: true }), configureModel().then(() => whisperAvailability({ verify: true }))])
+  const [tools, speech] = await Promise.all([
+    checkTools({ subtitles: true, timeoutMs: app.isPackaged ? 25_000 : 8000 }),
+    configureModel().then(() => whisperAvailability({ verify: true })),
+  ])
   if (!tools) throw new Error('Paketin FFmpeg veya FFprobe dosyaları çalışmadı. Uygulamayı yeniden kurmayı deneyin.')
   projects = createProjectStore(join(profile, 'project-recovery-beta.viralcut'), previous)
   previews = createPreviewQueue(projects.resolveMedia, diagnostics.record)

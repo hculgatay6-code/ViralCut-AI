@@ -69,9 +69,9 @@ function hasVideo(info) {
     stream.codec_type === 'video' && stream.width > 0 && stream.height > 0 && !stream.disposition?.attached_pic)
 }
 
-export async function checkTools({ subtitles = false } = {}) {
+export async function checkTools({ subtitles = false, timeoutMs = 8000 } = {}) {
   try {
-    const signal = AbortSignal.timeout(8000)
+    const signal = AbortSignal.timeout(timeoutMs)
     const [encoders, , filters] = await Promise.all([
       run('ffmpeg', ['-hide_banner', '-encoders'], signal),
       run('ffprobe', ['-version'], signal),
