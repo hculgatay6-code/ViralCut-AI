@@ -58,6 +58,10 @@ contextBridge.exposeInMainWorld('viralCutDesktop', {
     status: () => ipcRenderer.invoke('viralcut:director-status'),
     cancel: () => ipcRenderer.invoke('viralcut:director-cancel'),
   },
+  effectsLibrary: {
+    read: () => ipcRenderer.invoke('viralcut:effects-library-read'),
+    save: value => ipcRenderer.invoke('viralcut:effects-library-save', value),
+  },
   projects: {
     onClose: callback => {
       const listener = () => callback()

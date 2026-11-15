@@ -67,7 +67,7 @@ export function App() {
   const desktop = !!window.viralCutDesktop
   const [studioTab, setStudioTab] = useState<'media' | 'subtitles' | 'audio' | 'ai' | 'effects' | 'cover' | 'director' | 'performance' | 'copilot' | 'creator' | 'settings'>('media')
   const [beta, setBeta] = useState<BetaPreferences>()
-  const [version, setVersion] = useState('20.0.0')
+  const [version, setVersion] = useState('21.0.0')
   const [creatorIntent, setCreatorIntent] = useState<CreatorIntent>()
   const [copilotProject, setCopilotProject] = useState(0)
   const [safeGuides, setSafeGuides] = useState(false)
@@ -76,6 +76,8 @@ export function App() {
   const [timelineSize, setTimelineSize] = useState(300)
   const [sourceTab, setSourceTab] = useState(false)
   const [monitorHost, setMonitorHost] = useState<HTMLDivElement | null>(null)
+  const [effectHost,setEffectHost]=useState<HTMLDivElement|null>(null)
+  const [layerSelected,setLayerSelected]=useState('')
   const [settingsHost, setSettingsHost] = useState<HTMLDivElement | null>(null)
   const [speechHost, setSpeechHost] = useState<HTMLDivElement | null>(null)
   const [waveforms, setWaveforms] = useState<Record<string, Waveform>>({})
@@ -546,6 +548,7 @@ export function App() {
           {desktop && studioTab === 'cover' && <section className="panel"><header className="panel-header"><h2>{language === 'tr' ? 'Kapak stüdyosu' : 'Cover studio'}</h2></header>
             {source && metadata ? <CoverStudio key={source.url} language={language} source={source.url} range={range} cues={cues} /> : <p>{copy.emptyHelp}</p>}
           </section>}
+          {desktop && studioTab === 'effects' && <div className="panel effect-library-host" ref={setEffectHost} />}
           {desktop && (studioTab === 'effects' || studioTab === 'audio') && <EffectsPanel key={studioTab + (source?.url ?? '')}
             audio={studioTab === 'audio'} copy={copy} range={range} file={source?.file} cues={cues} effects={effects}
             edit={edit} update={updateEffects} undo={undoEffects} compare={compare} setCompare={setCompare} pause={stopSequence} />}
@@ -564,7 +567,7 @@ export function App() {
               await chooseAutoSource(result.media)
               return true
             }} />}
-          {desktop && <CopilotPanel visible={studioTab === 'copilot'} language={language} copy={copy} project={project} selected={currentClip}
+          {desktop && <CopilotPanel visible={studioTab === 'copilot'} language={language} copy={copy} project={project} selected={currentClip} layerSelected={layerSelected}
             creator={intent => { setCreatorIntent(intent); setStudioTab('creator') }}
             keyId={copilotProject} source={source && mountedSource && metadata ? { media: mountedSource, file: source.file, duration: metadata.duration } : undefined}
             apply={(expected, next) => {
@@ -669,7 +672,7 @@ export function App() {
             {desktop && <div className="studio-single-export">{singleExport}</div>}
           </aside>
           {!desktop && singleExport}
-          <ProjectPanel project={project} copy={copy} media={projectMedia} current={currentClip} setCurrent={setCurrentClip}
+          <ProjectPanel libraryHost={effectHost} selectLayer={setLayerSelected} project={project} copy={copy} media={projectMedia} current={currentClip} setCurrent={setCurrentClip}
             autosaveInterval={beta?.interval ?? 5} language={language} projectEpoch={copilotProject}
             undo={!!history.previous.length} redo={!!history.next.length} history={type => { stopSequence(); dispatch({ type }) }}
             update={updateProject} load={loadProject} addMedia={entries => { void addProjectMedia(entries) }}

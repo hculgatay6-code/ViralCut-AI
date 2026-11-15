@@ -10,6 +10,7 @@ import { recordCommand } from './copilotVoice'
 import type { CreatorIntent } from './CreatorPanel'
 
 const tools = {
+ layerLook: ['Klip görünümü', 'Clip look'],
  trim: ['Baştan kes', 'Trim from start'], length: ['Kısalt', 'Shorten'], seek: ['Zamana git', 'Seek'],
  remove: ['Klibi kaldır', 'Remove clip'], select: ['Klibi seç', 'Select clip'], brighten: ['Parlaklığı artır', 'Brighten clip'],
  captions: ['Altyazı rengi', 'Caption color'], shorts: ['Shorts adayları', 'Shorts candidates'], frame: ['Kadraj', 'Framing'],
@@ -24,6 +25,7 @@ const tools = {
 function description(step: Step, lang: Language) {
  const label = tools[step.tool][lang === 'tr' ? 0 : 1]
  const colors = { yellow: 'Sarı', green: 'Yeşil', blue: 'Mavi', red: 'Kırmızı', white: 'Beyaz' }
+ if (step.tool === 'layerLook') return label + ' · ' + ({cinematic:'Cinematic Glow',gaming:'Gaming RGB',oldfilm:'Vintage Film',dissolve:'Cross Dissolve',action:'Fast Action'})[step.preset] + (step.preset==='action' ? (lang==='tr'?' · öneri, paket kütüphanesinde':' · suggestion in the preset library') : '')
  if (step.tool === 'captions') return label + ' · ' + (lang === 'tr' ? colors[step.color] : step.color)
  if (step.tool === 'shorts') return label + ' · ≤' + step.count + ' / ' + step.goal + ' s'
  if (step.tool === 'frame') return label + ' · ' + ({ vertical: '9:16', square: '1:1', landscape: '16:9', track: lang === 'tr' ? 'Konu takibi' : 'Track subject' })[step.mode]
@@ -38,8 +40,8 @@ function description(step: Step, lang: Language) {
   'seconds' in step ? step.seconds + ' s' : '', 'count' in step ? '×' + step.count : ''].filter(Boolean).join(' · ')
 }
 
-export function CopilotPanel({ visible, language, copy, project, selected, source, keyId, apply, history, choose, select, close, compare, before, previewShort, creator }: {
- visible: boolean; language: Language; copy: Copy; project: Project; selected: string; source?: Source; keyId: number
+export function CopilotPanel({ visible, language, copy, project, selected, layerSelected, source, keyId, apply, history, choose, select, close, compare, before, previewShort, creator }: {
+ visible: boolean; language: Language; copy: Copy; project: Project; selected: string; layerSelected?:string; source?: Source; keyId: number
  apply: (expected: Project, next: Project) => void; history: (tool: 'undo' | 'redo', count: number) => boolean
  choose: () => Promise<boolean>; select: (index: number, time?: number) => boolean; close: () => void
  compare: boolean; before: () => void; previewShort: (context: ShortContext, index: number) => void
@@ -49,7 +51,7 @@ export function CopilotPanel({ visible, language, copy, project, selected, sourc
  const l = (turkish: string, english: string) => tr ? turkish : english
  const [input, setInput] = useState('')
  const [messages, setMessages] = useState<{ from: 'user' | 'assistant'; text: string }[]>([])
- const [pending, setPending] = useState<{ steps: Step[]; project: Project; source?: string; selected: string }>()
+ const [pending, setPending] = useState<{ steps: Step[]; project: Project; source?: string; selected: string; layerSelected?:string }>()
  const [short, setShort] = useState<ShortContext>()
  const [shortHistory, setShortHistory] = useState<{ undo: (ShortContext | undefined)[]; redo: (ShortContext | undefined)[] }>({ undo: [], redo: [] })
  const [index, setIndex] = useState<number>()
@@ -58,8 +60,8 @@ export function CopilotPanel({ visible, language, copy, project, selected, sourc
  const [voiceActive, setVoiceActive] = useState(false)
  const [outputFolder, setOutputFolder] = useState(false)
  const operation = useRef<AbortController | undefined>(undefined)
- const status = useRef({ project, source: source?.media.id, selected })
- useEffect(() => { status.current = { project, source: source?.media.id, selected } }, [project, source?.media.id, selected])
+ const status = useRef({ project, source: source?.media.id, selected, layerSelected })
+ useEffect(() => { status.current = { project, source: source?.media.id, selected, layerSelected } }, [project, source?.media.id, selected, layerSelected])
  useEffect(() => {
   operation.current?.abort()
   setMessages([]); setPending(undefined); setShort(undefined); setShortHistory({ undo: [], redo: [] }); setIndex(undefined); setOutputFolder(false)
@@ -96,7 +98,7 @@ export function CopilotPanel({ visible, language, copy, project, selected, sourc
    append('assistant', answer)
    return
   }
-  setPending({ steps: result.steps, project, source: source?.media.id, selected })
+  setPending({ steps: result.steps, project, source: source?.media.id, selected, layerSelected })
  }
 
  function failure(error: unknown) {
@@ -115,12 +117,15 @@ export function CopilotPanel({ visible, language, copy, project, selected, sourc
    shortFrame: l('Shorts listesi dikeydir. Yatay veya kare çıktı için zaman çizelgesini kullan.', 'Shorts outputs are portrait. Use the timeline for landscape or square.'),
    history: l('İstenen sayıda geçmiş adımı yok.', 'That many history steps are unavailable.'),
   }
+  if (reason==='effectSelection') return l('Katmanlı düzen üzerinde kilitsiz bir video klibi seç.', 'Select an unlocked video clip in the layered timeline.')
+  if (reason==='effectLimit') return l('Bu klibin efekt zinciri dolu.', 'The clip effect stack is full.')
+  if (reason==='effectAdjacent') return l('Geçiş için aynı izde bitişik bir klip gerekir.', 'The transition needs an adjacent clip on the same track.')
   return hints[reason] ?? copy.exportErrors[reason as keyof typeof copy.exportErrors] ?? copy.exportErrors.serviceError
  }
 
  async function confirm() {
   if (!pending || operation.current) return
-  if (status.current.project !== pending.project || status.current.source !== pending.source || status.current.selected !== pending.selected) {
+  if (status.current.project !== pending.project || status.current.source !== pending.source || status.current.selected !== pending.selected || status.current.layerSelected !== pending.layerSelected) {
    setPending(undefined); append('assistant', failure(Error('stale'))); return
   }
   const controller = new AbortController()
@@ -138,8 +143,8 @@ export function CopilotPanel({ visible, language, copy, project, selected, sourc
     if (!(await choose())) throw Error('cancelled')
     append('assistant', description(first, language))
    } else {
-    const applied = await executeCopilot(steps, { project, selected, source, short, language, signal: controller.signal,
-     current: () => status.current.project === project && status.current.source === pending.source, select,
+    const applied = await executeCopilot(steps, { project, selected, layerSelected, source, short, language, signal: controller.signal,
+     current: () => status.current.project === project && status.current.source === pending.source && status.current.layerSelected === pending.layerSelected, select,
      progress: setProgress, onStep: (step, note) => append('assistant',
       description(step, language) + (note === undefined ? '' : ' · ' + note)) })
     if (applied.project !== project) apply(project, applied.project)

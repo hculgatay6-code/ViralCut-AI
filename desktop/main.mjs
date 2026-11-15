@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { createExportService } from '../server/export.mjs'
 import { checkTools } from '../server/media.mjs'
 import { modelVerified, whisperAvailability } from '../server/whisper.mjs'
+import { libraryDocument } from '../server/effect-document.mjs'
 import { createProjectStore, localPath } from './projects.mjs'
 import { batchSize } from '../server/shorts-batch.mjs'
 import { ExportError } from '../server/media.mjs'
@@ -105,6 +106,26 @@ function registerDialogs() {
     await saveDiagnosticReport(picked.filePath, app.getVersion(), diagnostics)
     return { saved: true }
   }, true)
+  const libraryPath=join(app.getPath('userData'),'effects-library.json')
+  let libraryWrite=Promise.resolve()
+  safeHandle('effects-library-read', async ()=>{
+    await libraryWrite.catch(()=>{})
+    const info=await stat(libraryPath).catch(()=>null)
+    if (!info?.isFile()||info.size>1700000) return undefined
+    return libraryDocument(JSON.parse(await readFile(libraryPath,'utf8')))
+  })
+  safeHandle('effects-library-save', value=>{
+    const data=JSON.stringify(libraryDocument(value))
+    const task=libraryWrite.catch(()=>{}).then(async ()=>{
+      const temporary=libraryPath+'.'+randomBytes(12).toString('hex')+'.tmp'
+      try {
+        await writeFile(temporary,data,{flag:'wx',mode:0o600})
+        await rename(temporary,libraryPath)
+      } finally {await unlink(temporary).catch(()=>{})}
+    })
+    libraryWrite=task
+    return task.then(()=>true)
+  })
   safeHandle('beta-settings-read', () => ({ settings: settings.read(), version: app.getVersion() }))
   safeHandle('beta-settings-save', async requested => ({ settings: await settings.save(requested) }))
   let updateCheck
@@ -531,7 +552,7 @@ async function startServer() {
 
 async function openEditor() {
   const profile = app.getPath('userData')
-  const previous = [join(app.getPath('appData'), 'ViralCut AI v19', 'project-recovery-beta.viralcut'), join(app.getPath('appData'), 'ViralCut AI Beta', 'project-recovery-beta.viralcut'), join(previousProfile, 'project-recovery-v18.viralcut')]
+  const previous = [join(app.getPath('appData'), 'ViralCut AI v20', 'project-recovery-beta.viralcut'), join(app.getPath('appData'), 'ViralCut AI v19', 'project-recovery-beta.viralcut'), join(app.getPath('appData'), 'ViralCut AI Beta', 'project-recovery-beta.viralcut'), join(previousProfile, 'project-recovery-v18.viralcut')]
   ;[diagnostics, settings] = await Promise.all([createDiagnostics(profile), betaSettings(profile)])
   markClean = await startSessionMarker(profile, diagnostics.record)
   calendar = createCalendar(profile, previousProfile)
@@ -617,9 +638,9 @@ async function shutdown() {
   await markClean?.()
 }
 
-app.setAppUserModelId('com.viralcut.desktop.v20')
+app.setAppUserModelId('com.viralcut.desktop.v21')
 if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
-  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v20'))
+  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v21'))
 }
 if (!app.requestSingleInstanceLock()) app.quit()
 else {

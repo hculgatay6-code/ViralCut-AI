@@ -22,6 +22,7 @@ type Props = {
   framing?: Project['frame']
   removals: ClipRange[]
   monitorHost: HTMLDivElement | null
+  selectLayer?: (id:string)=>void; libraryHost?: HTMLDivElement | null
   settingsHost: HTMLDivElement | null; speechHost: HTMLDivElement | null
   openSource: () => void; selectSpeech: (range: ClipRange) => void; seekProject: (clip: ProjectClip, time: number) => void
   waveforms?: Record<string, Waveform>
@@ -349,7 +350,7 @@ export function ProjectPanel(props: Props) {
           onClick={() => void projectDialog('relink', entry.id)}>{copy.relinkMedia}</button>
       </div>)}
       {notice && <p role={failed ? 'alert' : 'status'}>{notice}</p>}
-      {layered && <LayeredTimeline key={props.projectEpoch} project={project} copy={copy} tr={tr} inspector={props.settingsHost} monitor={props.monitorHost}
+      {layered && <LayeredTimeline key={props.projectEpoch} project={project} copy={copy} tr={tr} selectLayer={props.selectLayer} libraryHost={props.libraryHost} inspector={props.settingsHost} monitor={props.monitorHost}
         undo={props.undo} redo={props.redo} history={props.history} change={update} waveforms={props.waveforms} stop={stop} />}
       {!layered && !!project.media.length && <>
         <div className="shorts-actions">

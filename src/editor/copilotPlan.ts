@@ -1,3 +1,5 @@
+import { effectPreset } from '../project/effect-presets.ts'
+import { maxEffects } from '../../server/effect-document.mjs'
 import type { Project } from '../project/model'
 import type { CreatorIntent } from './CreatorPanel'
 
@@ -15,6 +17,7 @@ export type Step =
  | { tool: 'frame'; mode: 'vertical' | 'square' | 'landscape' | 'track' }
  | { tool: 'undo' | 'redo'; count: number }
  | { tool: 'export'; resolution: 0 | 720 | 1080 }
+ | { tool: 'layerLook'; preset: 'cinematic' | 'gaming' | 'oldfilm' | 'dissolve' | 'action' }
  | { tool: 'join' | 'silence' | 'transcribe' | 'audio' | 'size' | 'effects' | 'polish' | 'save' | 'inspect' | 'choose' }
 
 type Context = { index?: number; shorts?: boolean }
@@ -54,6 +57,14 @@ export function parseCopilot(text: string, context: Context = {}): Result {
   const part = raw.replace(/^(?:please|lutfen|could you|can you)\s+/, '').replace(/(?:[’'])(?:u|i|yi|nin|in)\b/g, '').trim()
   if (!part || /^(?:please|lutfen|thanks|tesekkurler)$/.test(part)) continue
   if (negative.test(part) || /\b(komik|funny|hilarious|viral|en duygusal|buy my|meme)\b/.test(part)) return { error: 'unsupported', detail: raw }
+  const look = /\b(sinematik|cinematic)\b/.test(part) ? 'cinematic'
+    : /\b(rgb)\b/.test(part) && /\b(gaming|oyun\w*)\b/.test(part) ? 'gaming'
+    : /\b(eski film|old film|vintage film)\b/.test(part) ? 'oldfilm'
+    : /\b(yumusak gecis|smooth transition|cross dissolve)\b/.test(part) ? 'dissolve'
+    : /\b(hareketli sahne\w*|action scene\w*|fast action)\b/.test(part) && /\b(efekt\w*|effects?)\b/.test(part) ? 'action' : undefined
+  if (look && /\b(apply|add|put|use|make|recommend|suggest|uygula|ekle|koy|goster|oner|yap)\b/.test(part)) {
+   steps.push({tool:'layerLook',preset:look}); continue
+  }
   const ordinal = ordinals.findIndex(pattern => has(part, new RegExp('\\b(?:' + pattern + ')\\s+(?:clip|klib)\\w*\\b')))
   const standaloneOrdinal = ordinals.findIndex(pattern => has(part, new RegExp('\\b(?:' + pattern + ')(?:yi|ni|yu|nu)\\b')))
   const writtenIndex = /\b(?:clip|klip)\s+#?(\d+)\b/.exec(part)
@@ -136,6 +147,7 @@ export function validateSteps(steps: Step[]) {
     case 'creator': return keys('action platform count') && ['shorts', 'titles', 'cover', 'calendar', 'packages'].includes(step.action) &&
       (step.platform === undefined || ['youtube', 'tiktok', 'instagram'].includes(step.platform)) &&
       (step.count === undefined || integer(step.count, 1, 5))
+    case 'layerLook': return keys('preset') && ['cinematic','gaming','oldfilm','dissolve','action'].includes(step.preset)
     case 'cutRange': return keys('start end index') && Number.isFinite(step.start) && Number.isFinite(step.end) &&
       step.start >= 0 && step.end > step.start && step.end <= 86400 && integer(step.index, -1, 499)
     case 'export': return keys('resolution') && [0, 720, 1080].includes(step.resolution)
@@ -150,7 +162,24 @@ export function validateSteps(steps: Step[]) {
  if (steps.length > 1 && steps.some(step => ['undo', 'redo', 'choose', 'inspect', 'creator'].includes(step.tool))) throw Error('plan')
 }
 
-export function projectEdit(project: Project, step: Step, selected: string): Project {
+export function projectEdit(project: Project, step: Step, selected: string, layerSelected?: string): Project {
+ if (step.tool === 'layerLook') {
+  const timeline=project.timeline
+  const track=timeline?.tracks.find(track=>track.kind==='video' && track.clips.some(clip=>clip.id===layerSelected))
+  const clip=track?.clips.find(clip=>clip.id===layerSelected)
+  if (!timeline||!track||!clip||track.locked) throw Error('effectSelection')
+  if (step.preset==='action') return project
+  const stack=[...(clip.effects??[]),...effectPreset(step.preset,clip.length)]
+  if (stack.length>maxEffects) throw Error('effectLimit')
+  let incoming=clip.incoming
+  if (step.preset==='dissolve') {
+   if (clip.length<2 || !track.clips.some(item=>item.at+item.length===clip.at)) throw Error('effectAdjacent')
+   incoming={id:'dissolve',direction:'left',start:0,length:Math.min(clip.length,Math.round(timeline.fps*.4)),amount:.65}
+  }
+  const next={...clip,effects:stack,incoming}
+  return {...project,version:4,timeline:{...timeline,tracks:timeline.tracks.map(row=>row.id===track.id
+   ? {...track,clips:track.clips.map(item=>item.id===clip.id?next:item)} : row)}}
+ }
  if (step.tool === 'captions') return { ...project, burn: true, appearance: { ...project.appearance, textColor: colors[step.color], highlightColor: colors[step.color] } }
  if (step.tool === 'size') return { ...project, appearance: { ...project.appearance, size: Math.min(100, project.appearance.size + 8) } }
  if (step.tool === 'captionStyle') return { ...project, burn: true,

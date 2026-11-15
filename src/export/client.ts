@@ -95,6 +95,10 @@ declare global {
           cancel(): Promise<void>
         }
       }
+      effectsLibrary: {
+        read(): Promise<import('../../server/effect-document.mjs').EffectsLibrary | undefined>
+        save(value: import('../../server/effect-document.mjs').EffectsLibrary): Promise<boolean>
+      }
       projects: ProjectBridge
       studio: {
         templates(): Promise<{ templates?: import('../subtitles/CaptionStudio').CaptionTemplate[] }>

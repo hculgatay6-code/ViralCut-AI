@@ -739,3 +739,15 @@ svg { flex: none; }
 .keyframe-markers i { position:absolute; width:5px; height:5px; transform:translateX(-50%) rotate(45deg); background:#b7fa70; border:1px solid #2b482e; }
 .keyframe-markers i { pointer-events:auto; cursor:ew-resize; }
 .layer-clip:has(.keyframe-markers) .layer-trim { bottom:8px; }
+
+.effects-studio .effect-results { max-height:230px; overflow:auto; display:grid; gap:4px; margin:6px 0; }
+.effect-results > div,.effect-row { display:flex; align-items:center; gap:4px; justify-content:space-between; }
+.effect-row input[type=checkbox] { width:auto; }
+.effects-library { display:grid; gap:5px; padding:7px; }
+.effects-library label { display:grid; gap:4px; color:#a8aba5; font-size:12px; }
+.fx-badge { color:#d7f6ac; margin-left:6px; font:9px var(--mono); }
+.fx-transition { position:absolute; top:0; height:5px; background:#d9a96a; pointer-events:none; }
+.effect-library-host:empty { display:none; }
+.effects-library input,.effects-library select,.effects-library button { background:#202923; color:#e8eee7; border:1px solid #3a473e; border-radius:4px; padding:4px 7px; }
+.effects-library .effect-results { max-height:230px; overflow:auto; }
+.fx-transition { pointer-events:auto; cursor:ew-resize; min-width:6px; }

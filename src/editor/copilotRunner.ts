@@ -26,7 +26,7 @@ export async function finished(job: ExportJob, signal: AbortSignal, progress: (v
 export type ShortContext = { source: string; rows: PlannedShort[] }
 export type Source = { media: ProjectMedia; file: File; duration: number }
 export type RunOptions = {
- project: Project; source?: Source; selected: string; timelineIndex?: number; short?: ShortContext; language: Language; signal: AbortSignal
+ project: Project; source?: Source; selected: string; layerSelected?:string; timelineIndex?: number; short?: ShortContext; language: Language; signal: AbortSignal
  progress: (value: number) => void; onStep: (step: Step, note?: string) => void
  current: () => boolean
  select: (index: number, seconds?: number) => boolean
@@ -58,6 +58,7 @@ export async function executeCopilot(steps: Step[], options: RunOptions) {
  }
  let resolution: 720 | 1080 | undefined
  let save = false
+ const layered = steps.some(step=>step.tool==='layerLook' && step.preset!=='action')
  const applied: { step: Step; note?: string }[] = []
  const done = (step: Step, note?: string) => applied.push({ step, note })
  const complete = () => { for (const row of applied) options.onStep(row.step, row.note) }
@@ -145,15 +146,15 @@ export async function executeCopilot(steps: Step[], options: RunOptions) {
    if (!result.cues.length) throw Error('captionsMissing')
    project = { ...project, burn: true, media: project.media.map(media => media.id === source.media.id ? { ...media, cues: result.cues } : media) }
   } else {
-   ensureProject()
-   project = projectEdit(project, step, options.selected)
+   if (step.tool!=='layerLook') ensureProject()
+   project = projectEdit(project, step, options.selected, options.layerSelected)
    if (step.tool === 'join') resolution ??= project.profile.resolution
   }
   done(step)
  }
  guard()
  if (save) {
-  if (!project.clips.length) {
+  if (!project.clips.length && !layered) {
    if (!short) ensureProject()
    else {
     const rows = short.rows
@@ -197,9 +198,9 @@ export async function executeCopilot(steps: Step[], options: RunOptions) {
    } catch (error) { cancel(); throw error }
    finally { signal.removeEventListener('abort', cancel) }
   } else {
-   ensureProject()
+   if (!layered) ensureProject()
    project = { ...project, profile: { ...project.profile, resolution } }
-   const job = await localExporter.createSequence(project)
+   const job = await (layered ? localExporter.createLayers(project) : localExporter.createSequence(project))
    const result = await run(job, id => localExporter.save(id, 'ViralCut-Copilot.mp4', signal))
    options.onStep({ tool: 'export', resolution }, result.filename)
   }

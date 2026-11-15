@@ -10,7 +10,7 @@ export const defaultProfile: Profile = { resolution: 1080, fps: 30, quality: 'ba
 export interface ProjectMedia { id: string; name: string; size: number; missing: boolean; audioOnly?: boolean; cues: Cue[] }
 export interface ProjectClip extends ClipRange { id: string; mediaId: string; muteAudio?: boolean; effects?: StudioEffects; transition?: StudioTransition }
 export interface Project {
-  version: 1 | 2 | 3
+  version: 1 | 2 | 3 | 4
   timeline?: LayerTimeline
   media: ProjectMedia[]
   clips: ProjectClip[]

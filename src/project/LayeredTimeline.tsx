@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import type { Copy } from '../i18n'
 import type { Project, ProjectMedia, Waveform } from './model'
 import { LayerOutput } from './LayerOutput'
+import { sliceEffects } from '../../server/effect-document.mjs'
 import { sliceAnimation } from '../../server/keyframes.mjs'
 import type { Animation } from '../../server/keyframes.mjs'
 import { useLayerThumbnails } from './layer-thumbnails'
@@ -12,12 +13,13 @@ import { addLayerClips, changeGap, deleteSelection, emptyTrack, frameCode, layer
 import type { ClipSelection, LayerTimeline, TimelineClip, Track, TrackKind } from './layer-model'
 
 type Props = {
-  project: Project; copy: Copy; tr: boolean
+  project: Project; libraryHost?: HTMLDivElement | null; selectLayer?: (id:string)=>void; copy: Copy; tr: boolean
   inspector: HTMLDivElement | null; monitor: HTMLDivElement | null
   undo: boolean; redo: boolean; history: (op: 'undo' | 'redo') => void
   change: (apply: (project: Project) => Project) => void
   waveforms?: Record<string, Waveform>; stop: () => void
 }
+const EffectsStudio = lazy(() => import('./EffectsStudio').then(module => ({ default: module.EffectsStudio })))
 const AnimationStudio = lazy(() => import('./AnimationStudio').then(module => ({ default: module.AnimationStudio })))
 const empty = new Set<string>()
 function visibleKeyframes(clip: TimelineClip, scale: number, start: number, end: number) {
@@ -75,7 +77,7 @@ function Field({ label, value, set, min, max, step = 1 }: {
     }} /></label>
 }
 
-export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, redo, history, change, waveforms = {}, stop }: Props) {
+export function LayeredTimeline({ project, copy, tr, inspector, monitor, libraryHost, selectLayer, undo, redo, history, change, waveforms = {}, stop }: Props) {
   const timeline = project.timeline!
   const { fps } = timeline
   const t = (turkish: string, english: string) => tr ? turkish : english
@@ -93,7 +95,8 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
   const sourceLengths = useRef(new Map<string, number>())
   const clipboard = useRef<ClipSelection>([])
   const animationClipboard = useRef<Animation>(undefined)
-  const drag = useRef<{ id: string; ids: ReadonlySet<string>; frame: number; x: number; y: number; scroll: number; key?: number; edge?: 'start' | 'end' } | null>(null)
+  const effectsClipboard=useRef('')
+  const drag = useRef<{ id: string; ids: ReadonlySet<string>; frame: number; x: number; y: number; scroll: number; key?: number; transition?: boolean; edge?: 'start' | 'end' } | null>(null)
   const scroll = useRef<HTMLDivElement>(null)
   const [viewport, setViewport] = useState({ left: 0, width: 1100 })
   const thumbnail = useLayerThumbnails(scroll, project.media)
@@ -101,6 +104,7 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
   const sourceMap = useMemo(() => new Map(project.media.map(entry => [entry.id, entry])), [project.media])
   const selected = useMemo(() => selectedClips(timeline, selection), [timeline, selection])
   const active = selected.length === 1 ? selected[0] : undefined
+  useEffect(()=>{selectLayer?.(active?.track.kind=== 'video' ? active.clip.id : '');return()=>selectLayer?.('')},[active?.clip.id,active?.track.kind,selectLayer])
   const track = timeline.tracks.find(track => track.id === trackId) ?? active?.track ?? timeline.tracks[0]
   const total = useMemo(() => layerDuration(timeline), [timeline])
   const scale = Math.min(zoom / fps, 180000 / Math.max(1, total))
@@ -141,7 +145,8 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
       return false
     }
     setNotice('')
-    const version = next.tracks.some(row => row.clips.some(item => item.animation)) ? 3 : project.version
+    const version = next.tracks.some(row => row.clips.some(item => item.effects?.length || item.incoming)) ? 4
+      : project.version < 3 && next.tracks.some(row => row.clips.some(item => item.animation)) ? 3 : project.version
     change(current => current.timeline === timeline ? { ...current, version, timeline: next } : current)
     return true
   }
@@ -213,6 +218,7 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
 
   async function trim(row: Track, clip: TimelineClip, mode: boolean) {
     const old = row.clips.find(item => item.id === clip.id)
+    if (old?.effects && clip.length>=1) clip={...clip,effects:sliceEffects(old.effects,(clip.inFrame??clip.at)-(old.inFrame??old.at),clip.length)}
     if (old?.animation && clip.length >= 1) {
       const offset = (clip.inFrame ?? clip.at) - (old.inFrame ?? old.at)
       clip = { ...clip, animation: sliceAnimation(old.animation, offset, clip.length) }
@@ -249,18 +255,19 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
     setTrackId(row.id); setSelection(ids)
     if (row.locked || multi || adding) return
     event.currentTarget.setPointerCapture(event.pointerId)
+    const transition=event.target instanceof HTMLElement && event.target.hasAttribute('data-fx-transition')
     const marker=event.target instanceof HTMLElement ? event.target.dataset.keyframe : undefined
     if (marker !== undefined) setAt(clip.at+Number(marker))
     const bounds = event.currentTarget.getBoundingClientRect()
     const edge = bounds.width > 24 ? event.clientX - bounds.left < 7 ? 'start' :
       bounds.right - event.clientX < 7 ? 'end' : undefined : undefined
     drag.current = { id: clip.id, ids, frame: edge === 'end' ? clip.at + clip.length : clip.at,
-      x: event.clientX, y: event.clientY, scroll: scroll.current?.scrollLeft ?? 0, edge, key:marker===undefined ? undefined : Number(marker) }
+      x: event.clientX, y: event.clientY, scroll: scroll.current?.scrollLeft ?? 0, edge, transition, key:marker===undefined ? undefined : Number(marker) }
   }
 
   function dragMove(event: PointerEvent<HTMLButtonElement>) {
     const start = drag.current
-    if (start && !start.edge && start.key===undefined) setDragOffset(Math.round(event.clientX - start.x + (scroll.current?.scrollLeft ?? 0) - start.scroll))
+    if (start && !start.edge && !start.transition && start.key===undefined) setDragOffset(Math.round(event.clientX - start.x + (scroll.current?.scrollLeft ?? 0) - start.scroll))
   }
 
   function dragFinish(event: PointerEvent<HTMLButtonElement>) {
@@ -272,6 +279,13 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
     const nearest = snap ? snapFrame(timeline, raw, at, Math.min(fps / 3, 9 / scale), new Set(origin.ids)) : Math.max(0, Math.round(raw))
     const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-layer-row]')?.dataset.layerRow
     const source = timeline.tracks.find(track => track.clips.some(clip => clip.id === origin.id))
+    if (origin.transition) {
+      const clip=source?.clips.find(item=>item.id===origin.id)
+      if (!source||!clip?.incoming) return
+      const start=Math.max(0,Math.min(clip.length-clip.incoming.length,clip.incoming.start+Math.round(raw-origin.frame)))
+      if (start!==clip.incoming.start && commit(putLayerClip(timeline,source.id,{...clip,incoming:{...clip.incoming,start}}))) setAt(clip.at+start)
+      return
+    }
     if (origin.key !== undefined) {
       const clip=source?.clips.find(item=>item.id===origin.id)
       if (!source||!clip?.animation) return
@@ -342,6 +356,10 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
   </fieldset>
 
   const properties = <>
+  {active?.track.kind === 'video' && <Suspense fallback={null}><EffectsStudio key={active.clip.id}
+    clip={active.clip} fps={fps} at={at} tr={tr} locked={active.track.locked} clipboard={effectsClipboard} libraryHost={libraryHost}
+    adjacent={active.track.clips.some(item=>item.at+item.length===active.clip.at)}
+    apply={clip=>commit(putLayerClip(timeline,active.track.id,clip))} /></Suspense>}
   {active && <Suspense fallback={null}><AnimationStudio key={active.clip.id} clip={active.clip} kind={active.track.kind} at={at} fps={fps}
     tr={tr} locked={active.track.locked} seek={setAt} clipboard={animationClipboard}
     cues={sourceMap.get(active.clip.mediaId ?? '')?.cues}
@@ -498,7 +516,9 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, undo, r
                   <img key={clip.mediaId + ':' + clip.inFrame} className="layer-thumb" alt="" ref={thumbnail}
                     data-source={clip.mediaId} data-time={clip.inFrame! / fps} />}
                 {row.kind === 'audio' && waveform && <Wave waveform={waveform} inFrame={clip.inFrame!} length={clip.length} fps={fps} />}
-                <span>{label}</span>
+                <span>{label}{!!clip.effects?.length && <small className="fx-badge" aria-hidden="true">FX {clip.effects.length}</small>}</span>
+                {clip.incoming && <i className="fx-transition" data-fx-transition title={clip.incoming.id}
+                  style={{left:clip.incoming.start/clip.length*100+'%',width:clip.incoming.length/clip.length*100+'%'}} />}
                 {clip.animation && <span className="keyframe-markers" aria-hidden="true">
                   {visibleKeyframes(clip, scale, windowStart, windowEnd).map(frame =>
                     <i key={frame} data-keyframe={frame} title={t('Anahtar kare','Keyframe')+' '+frame} style={{left:frame/clip.length*100+'%'}} />)}
