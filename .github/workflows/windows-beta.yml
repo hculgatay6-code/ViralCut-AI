@@ -24,11 +24,23 @@ jobs:
       - name: Prepare verified media tools for tests
         shell: pwsh
         run: ./scripts/prepare-windows-media-tests.ps1
+      - name: Install npm dependencies
+        shell: pwsh
+        run: npm ci
+      - name: Install and check Electron for desktop tests
+        shell: pwsh
+        run: |
+          node node_modules/electron/install.js
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $electron = node -p "require('electron')"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          & $electron --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
       - name: Test
         shell: pwsh
         run: |
-          npm ci
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           npx playwright install chrome
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           npm run lint
