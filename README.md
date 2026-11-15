@@ -4,13 +4,19 @@
 
 # ViralCut AI Desktop
 
-**v18.1 Beta · Windows x64 · Türkçe / English**
+**v19.0.0 Professional Timeline 2.0 · Windows x64 · Türkçe / English**
 
 Yerel video düzenleme, otomatik altyazı ve dikey video hazırlama uygulaması.
 
 A local video editor for cutting footage, generating captions, and preparing vertical clips.
 
 [Türkçe](#türkçe) · [English](#english) · [Ekran görüntüleri / Screenshots](#ekran-görüntüleri--screenshots) · [Sürümler / Releases](https://github.com/hculgatay6-code/ViralCut-AI/releases) · [Değişiklik günlüğü / Changelog](CHANGELOG.md)
+
+## v19.0.0
+
+Bu kaynak dalı v19'u içerir. Aşağıdaki Windows indirmeleri yayımlanmış v18.1 Beta paketleridir. v19 test kapsamı ve dağıtım durumu [Türkçe test raporunda](V19_TEST_RAPORU.md) yer alır.
+
+This source branch contains v19. The Windows downloads below are the published v18.1 Beta packages. See the [v19 test report](V19_TEST_RAPORU.md) for validation and distribution status.
 
 ## Türkçe
 
@@ -25,7 +31,17 @@ A local video editor for cutting footage, generating captions, and preparing ver
 | Dışa aktarma | MP4 olarak kaydet. Uyumlu NVIDIA donanımında NVENC, diğer durumlarda CPU kullanılabilir. |
 | Proje ve kurtarma | Projeyi kaydet, yeniden aç, otomatik kayıt aralığını değiştir ve beklenmeyen kapanış sonrası kurtarma kaydını yükle. |
 
-### İndir ve başla
+### Professional Timeline 2.0
+
+1. **Projeye video ekle** veya **Proje aç** ile başla. **Katmanlı düzen** seçeneği V1, A1 ve CC1 kanallarını oluşturur.
+2. Medyayı sol panelden uyumlu bir katmana sürükle veya medyayı seçip **İmlece ekle**. Bağımsız WAV, MP3 ve M4A dosyaları için **Ses dosyası ekle** seçeneğini kullan.
+3. Aynı katmanda klipler çakışamaz. Üstte görünen video katmanları alttakilerin üzerine bindirilir. Klip kenarlarını sürükleyerek kırp. Sağ panelden kare konumunu, ölçeği, opaklığı veya katman sesini ayarla.
+4. Ctrl veya Shift ile klipleri birlikte seç. Ctrl+C/V/D kopyalar, yapıştırır ve çoğaltır. S imleçte böler. Delete siler. Ok tuşları imleci bir kare oynatır. Ripple modu aynı katmanda silme ve bitiş kırpma sonrası gelen klipleri kaydırır.
+5. **Buradan 8 sn önizle** aynı FFmpeg kompozisyonunun kısa bir bölümünü üretir. **Katmanları MP4 hazırla** ile kompozisyonu bütünüyle dışa aktar.
+
+v1 dosyaları doğrudan açılır. Katmanlı düzeni etkinleştirip kaydedince dosya v2 olur. Önceki klipler, kaynak altyazılar, efektler ve geçişler **Eski düzen** görünümünde saklanır. Katmanlı düzen başlangıçta kareye hizalanmış kesimleri ve düz altyazı bloklarını alır. Eski ve katmanlı düzen bağımsız kurgulardır. Rapor; önizleme, eşzamanlı katman ve sürüm sınırlarını açıklar.
+
+### Yayımlanmış v18.1 Beta paketleri
 
 | Paket | Kullanım |
 | --- | --- |
@@ -47,6 +63,12 @@ Windows 10/11 x64 hedeflenir. Windows 11 ve yaklaşık 16 GB RAM ile doğruland�
 - Güncelleme kontrolü istek üzerine GitHub’a bağlanır ve kurulum yapmaz. YouTube’a gönderme ayrı OAuth bağlantısı ve açık onay gerektirir. Canlı yayın akışı doğrulanmadı. TikTok ve Instagram’a yükleme elle yapılır. Takvim, uygulama kapalıyken yayın başlatmaz.
 
 ## English
+
+### Professional Timeline 2.0
+
+From a project, open **Multitrack editor**. Add video, audio, caption or text tracks. Drag media from the library onto a compatible track or use **Add at playhead**. Higher video tracks composite over lower tracks. Audio tracks have independent volume, mute and solo controls. Drag clip edges to trim, or use frame positions in the inspector. Overlaps within a track are rejected. **Preview 8 s from playhead** and **Render layers to MP4** use the same composition engine.
+
+Version 1 projects remain readable. Saving the multitrack edit creates a version 2 project with the original sequence, effects and captions available in **Legacy sequence**. The layered copy starts from cuts and plain caption blocks. The two edits have independent clip state.
 
 ### What you can do
 
