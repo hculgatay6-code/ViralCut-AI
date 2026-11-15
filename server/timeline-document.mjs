@@ -1,3 +1,4 @@
+import { effectDocument, transitionDocument } from './effect-document.mjs'
 import { keyframeDocument, keyframeLimits } from './keyframes.mjs'
 
 const kinds = ['video', 'audio', 'caption', 'text']
@@ -37,7 +38,12 @@ export function timelineDocument(value, hasMedia) {
       const animation = keyframeDocument(clip.animation, kind, clip.length)
       for (const points of Object.values(animation ?? {})) keyframes += points.length
       requireValid(keyframes <= keyframeLimits.project)
-      const base = { id: identifier(clip.id), at: clip.at, length: clip.length, ...(animation ? { animation } : {}) }
+      const effects = effectDocument(clip.effects, clip.length)
+      const transition = transitionDocument(clip.incoming, clip.length, value.fps)
+      requireValid(kind === 'video' || (!effects?.length && !transition))
+      for (const effect of effects ?? []) keyframes += effect.keys?.length ?? 0
+      requireValid(keyframes <= keyframeLimits.project)
+      const base = { ...(effects?.length ? {effects} : {}), ...(transition ? {incoming:transition} : {}), id: identifier(clip.id), at: clip.at, length: clip.length, ...(animation ? { animation } : {}) }
       if (kind === 'caption' || kind === 'text') {
         requireValid(typeof clip.text === 'string' && clip.text.trim() && clip.text.length <= 500)
         return { ...base, text: clip.text }
@@ -51,6 +57,7 @@ export function timelineDocument(value, hasMedia) {
       return { ...source, x: clip.x, y: clip.y, scale: clip.scale, opacity: clip.opacity }
     }).sort((a, b) => a.at - b.at)
     requireValid(clips.every((clip, i) => !i || clips[i - 1].at + clips[i - 1].length <= clip.at))
+    requireValid(clips.every((clip, i) => !clip.incoming || (i > 0 && clips[i-1].at + clips[i-1].length === clip.at)))
     return { id, kind, name, locked, hidden, muted, solo, gain, clips }
   })
   return { fps: value.fps, tracks }

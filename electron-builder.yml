@@ -1,5 +1,5 @@
-appId: com.viralcut.desktop.v20
-productName: ViralCut AI v20
+appId: com.viralcut.desktop.v21
+productName: ViralCut AI v21
 directories:
   output: release
 asar: true
@@ -18,6 +18,8 @@ files:
   - server/layers.mjs
   - server/keyframes.mjs
   - server/animation-render.mjs
+  - server/effect-document.mjs
+  - server/effect-render.mjs
   - server/timeline-document.mjs
   - server/preview.mjs
   - server/shorts-batch.mjs

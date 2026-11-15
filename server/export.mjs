@@ -21,7 +21,7 @@ import { analysisKey } from './analysis-cache.mjs'
 const idleLimit = 30 * 60 * 1000
 const prefix = 'viralcut-export-v3-'
 const tempFiles = ['input.mp4', 'input.webm', 'output.mp4', 'audio.wav', 'transcript.json', 'caption.ass', 'parts.txt',
-  'layers.filters', 'v0-alpha.cmd', 'v1-alpha.cmd', 'v2-alpha.cmd', 'v3-alpha.cmd', 'v4-alpha.cmd', 'edge-a.mkv', 'edge-b.mkv', 'edge-caption-a.ass', 'edge-caption-b.ass', 'studio-picture.mkv', 'studio-sequence.mkv']
+  'layers.filters', 'v0-fx.cmd', 'v1-fx.cmd', 'v2-fx.cmd', 'v3-fx.cmd', 'v4-fx.cmd', 'v0-alpha.cmd', 'v1-alpha.cmd', 'v2-alpha.cmd', 'v3-alpha.cmd', 'v4-alpha.cmd', 'edge-a.mkv', 'edge-b.mkv', 'edge-caption-a.ass', 'edge-caption-b.ass', 'studio-picture.mkv', 'studio-sequence.mkv']
 
 async function removeWorkDir(directory) {
   const parts = (await readdir(directory)).filter(name => /^part-\d{1,4}\.mkv$/.test(name))
