@@ -1,0 +1,46 @@
+name: Windows beta validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: ['audit/**', 'beta/**']
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Prepare verified media tools for tests
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'viralcut-test-tools'
+          New-Item -ItemType Directory -Path $root | Out-Null
+          $archive = Join-Path $root 'ffmpeg.zip'
+          Invoke-WebRequest 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne '60F467265B1E312373DBCD92200C2618A74850F98D3D078E94296BB3FA2047BA') {
+            throw 'The FFmpeg test runtime checksum changed.'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $root
+          (Resolve-Path (Join-Path $root 'ffmpeg-9.0.2-essentials_build/bin')).Path |
+            Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Test
+        shell: pwsh
+        run: |
+          npm ci
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npx playwright install chrome
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm run lint
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm test -- --test-concurrency=2
