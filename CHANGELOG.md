@@ -1,5 +1,13 @@
 # Değişiklik günlüğü
 
+## v20.0.0
+
+- Kare hassasiyetinde video/metin konumu, ölçek, döndürme ve opaklık, altyazıda aşamalı metin ve ses klibinde kazanç anahtar kareleri.
+- Timeline elmasları, çoklu seçim, kopyala/yapıştır, geri alma ve doğrusal, bekle, Ease ve sürüklenebilir Bézier eğrileri.
+- 23 hareket şablonu. Uygun konuşma zamanlarından gelen zoom önerisini düzenlenebilir ölçek karelerine aktarabilme.
+- Aynı FFmpeg motoruyla animasyonlu önizleme ve MP4, hazır önizleme aralığında konum değiştirme. NVENC ve CPU kodlama.
+- v1/v2 ile uyumlu v3 proje belgeleri, anahtar kare doğrulama ve geri yükleme. [Test raporu](V20_TEST_RAPORU.md)
+
 ## v19.0.0
 
 - Kare tabanlı video, ses, altyazı ve metin yolları. Klip taşıma, kenardan kırpma, bölme, birleştirme, snap, ripple, boşluk düzenleme, kopyalama ve ortak geri alma/yineleme.

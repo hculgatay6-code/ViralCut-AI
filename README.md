@@ -4,7 +4,7 @@
 
 # ViralCut AI Desktop
 
-**v19.0.0 Professional Timeline 2.0 · Windows x64 · Türkçe / English**
+**v20.0.0 Animation & Keyframe Studio · Windows x64 · Türkçe / English**
 
 Yerel video düzenleme, otomatik altyazı ve dikey video hazırlama uygulaması.
 
@@ -12,11 +12,27 @@ A local video editor for cutting footage, generating captions, and preparing ver
 
 [Türkçe](#türkçe) · [English](#english) · [Ekran görüntüleri / Screenshots](#ekran-görüntüleri--screenshots) · [Sürümler / Releases](https://github.com/hculgatay6-code/ViralCut-AI/releases) · [Değişiklik günlüğü / Changelog](CHANGELOG.md)
 
+## v20.0.0
+
+Bu dal, çok katmanlı zaman çizelgesine kare tabanlı animasyon ekler. Dağıtım ve ölçüm durumu [v20 Türkçe test raporunda](V20_TEST_RAPORU.md) yer alır. Aşağıdaki indirme bağlantıları yayımlanmış v18.1 Beta paketlerine aittir.
+
+This branch adds frame-addressed animation to the multitrack timeline. See the [v20 validation report](V20_TEST_RAPORU.md). The download links below point to the published v18.1 Beta packages.
+
+### Animasyon stüdyosu / Animation Studio
+
+1. **Katmanlı düzen** içinde bir klip seç. Sağdaki **Animasyon stüdyosu** bölümünde kanalı seç.
+2. İmleci istediğin kareye götür ve **+ Anahtar kare** düğmesini kullan. Değeri ve sonraki kareye uygulanacak eğriyi düzenle. **Cubic Bézier** seçildiğinde grafikte iki tutamaç sürüklenebilir.
+3. Zaman çizelgesindeki elmasları sürükleyerek zamanlarını değiştir. Panelde Ctrl veya Shift ile birden çok kare seçebilirsin. Hareket şablonları düzenlenebilir anahtar kareler oluşturur.
+4. **Buradan 8 sn önizle** ile birleşik görüntüyü kontrol et. Hazır bölüm içinde imleci değiştirip düğmeye yeniden basmak mevcut önizlemeyi kullanır. **Katmanları MP4 hazırla** aynı kompozisyonu işler.
+5. Animasyon eklenen projeler v3 olarak kaydedilir. v1 ve v2 dosyaları açılabilir.
+
+Select a clip in **Multitrack editor**, then choose a channel in **Animation Studio**. Add keyframes at the playhead and choose an outgoing curve. Drag the handles for **Cubic Bézier** or move diamond markers on the timeline. Motion presets generate ordinary editable keyframes. Video, text and captions have position, scale, rotation and opacity channels. Text and captions can reveal graphemes, and audio clips have a gain envelope. **Preview 8 s from playhead** and MP4 export share the compositor. Projects with animation save as v3.
+
 ## v19.0.0
 
-Bu kaynak dalı v19'u içerir. Aşağıdaki Windows indirmeleri yayımlanmış v18.1 Beta paketleridir. v19 test kapsamı ve dağıtım durumu [Türkçe test raporunda](V19_TEST_RAPORU.md) yer alır.
+Önceki sürümün katmanlı düzenleme ve ölçüm ayrıntıları [v19 test raporunda](V19_TEST_RAPORU.md) yer alır.
 
-This source branch contains v19. The Windows downloads below are the published v18.1 Beta packages. See the [v19 test report](V19_TEST_RAPORU.md) for validation and distribution status.
+See the [v19 test report](V19_TEST_RAPORU.md) for the original multitrack validation.
 
 ## Türkçe
 
