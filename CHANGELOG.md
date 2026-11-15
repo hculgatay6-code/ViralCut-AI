@@ -1,5 +1,13 @@
 # Değişiklik günlüğü
 
+## v21.0.0
+
+- Gerçek FFmpeg renderına bağlı 28 video efekti, sekiz adımlı sıralanabilir zincir, etkinleştirme, kopyalama ve kare bazlı yoğunluk animasyonu.
+- Çok katmanlı bileşime bağlı dokuz giriş geçişi, kare bazlı başlangıç ve süre, uygun geçişlerde yön ve yoğunluk.
+- 35 hazır paket, kategori ve arama, favoriler, profil içinde özel paketler ve doğrulanmış JSON alışverişi.
+- Copilot üzerinden seçili katman klibine sinematik, Gaming RGB, eski film ve çapraz çözünme uygulama.
+- v4 proje belgeleri, v1/v2/v3 açma ve mevcut geri alma ile otomatik kayıt. [Test raporu](V21_TEST_RAPORU.md)
+
 ## v20.0.0
 
 - Kare hassasiyetinde video/metin konumu, ölçek, döndürme ve opaklık, altyazıda aşamalı metin ve ses klibinde kazanç anahtar kareleri.

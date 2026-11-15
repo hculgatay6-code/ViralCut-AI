@@ -4,7 +4,7 @@
 
 # ViralCut AI Desktop
 
-**v20.0.0 Animation & Keyframe Studio · Windows x64 · Türkçe / English**
+**v21.0.0 Effects & Transitions Studio · Windows x64 · Türkçe / English**
 
 Yerel video düzenleme, otomatik altyazı ve dikey video hazırlama uygulaması.
 
@@ -12,11 +12,20 @@ A local video editor for cutting footage, generating captions, and preparing ver
 
 [Türkçe](#türkçe) · [English](#english) · [Ekran görüntüleri / Screenshots](#ekran-görüntüleri--screenshots) · [Sürümler / Releases](https://github.com/hculgatay6-code/ViralCut-AI/releases) · [Değişiklik günlüğü / Changelog](CHANGELOG.md)
 
+## v21.0.0 · Effects & Transitions Studio
+
+1. **Katmanlı düzen** içinde bir video klibi seç. Üstteki **Efektler** sekmesi soldaki kütüphaneyi açar. Sağdaki **Efekt stüdyosu** zinciri düzenler.
+2. Kütüphaneden bir efekt ekle veya hazır paketi seç. Bir klipte sekiz efekti sıralayabilir, kapatabilir veya silebilirsin. Başlangıç ve bitiş karelerini ayarla. İmleçte yoğunluk anahtar karesi ekleyip eğriyi seç.
+3. Aynı izde önceki klibe bitişik bir klibi seçip **Giriş geçişi** ekle. Süresini ve başlangıç karesini düzenle veya zaman çizelgesindeki geçiş şeridini sürükle. Geçiş giriş klibinin içinde gerçekleşir ve ses yolunun zamanını değiştirmez.
+4. **Buradan 8 sn önizle** ve **Katmanları MP4 hazırla** aynı FFmpeg işlemesini kullanır. Özel paketler uygulama profilinde tutulabilir ve JSON olarak aktarılabilir.
+
+Select a video clip in **Multitrack editor**. Open **Effects** for the library and edit the stack in **Effects Studio**. Effects can have a frame range and an animated strength envelope. Adjacent clips on the same track support incoming transitions. Use the same composite engine for an eight-second preview or the MP4 export. Projects with effects or transitions save as v4. See the [v21 validation report](V21_TEST_RAPORU.md) for compatibility, measurements and limits.
+
 ## v20.0.0
 
-Bu dal, çok katmanlı zaman çizelgesine kare tabanlı animasyon ekler. Dağıtım ve ölçüm durumu [v20 Türkçe test raporunda](V20_TEST_RAPORU.md) yer alır. Aşağıdaki indirme bağlantıları yayımlanmış v18.1 Beta paketlerine aittir.
+v20, çok katmanlı zaman çizelgesine kare tabanlı animasyon ekledi. Dağıtım ve ölçüm durumu [v20 Türkçe test raporunda](V20_TEST_RAPORU.md) yer alır. Aşağıdaki indirme bağlantıları yayımlanmış v18.1 Beta paketlerine aittir.
 
-This branch adds frame-addressed animation to the multitrack timeline. See the [v20 validation report](V20_TEST_RAPORU.md). The download links below point to the published v18.1 Beta packages.
+v20 added frame-addressed animation to the multitrack timeline. See the [v20 validation report](V20_TEST_RAPORU.md). The download links below point to the published v18.1 Beta packages.
 
 ### Animasyon stüdyosu / Animation Studio
 
