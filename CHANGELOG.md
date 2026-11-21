@@ -1,5 +1,12 @@
 # Değişiklik günlüğü
 
+## v24.0.0
+
+- Yerel Shorts analizinden gelen onaylı kesimleri ayrı video, ses ve altyazı katmanlarına dönüştür. Mevcut kurgunun sonuna ekleme ve tek adımda geri alma.
+- Kaynak karelerine bağlı otomatik kadraj, elle kadraj düzeltme, düzenlenebilir yakınlaştırma anahtar kareleri ve ses filtrelerini geri alma.
+- 15–60 saniye aralığında özel hedef süre, kaynak ve hedef çözünürlük gösterimi, 9:16/1:1/16:9 toplu dışa aktarma ve eksik çıktıları tekrar deneme.
+- Yeni analiz tamamlanıncaya kadar önceki önerileri koru. v23 kurtarma kayıtlarına ve kurulu modellere erişimi sürdür.
+
 ## v23.0.0
 
 - Kalıcı koyu/açık tema, panel boyut ve görünürlük tercihleri, klavyeyle boyutlandırma ve düzen sıfırlama.

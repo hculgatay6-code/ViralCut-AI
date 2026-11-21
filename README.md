@@ -4,13 +4,21 @@
 
 # ViralCut AI Desktop
 
-**v23.0.0 Professional UI & Workflow Studio · Windows x64 · Türkçe / English**
+**v24.0.0 AI Auto Editor · Windows x64 · Türkçe / English**
 
 Yerel video düzenleme, otomatik altyazı ve dikey video hazırlama uygulaması.
 
 A local video editor for cutting footage, generating captions, and preparing vertical clips.
 
 [Türkçe](#türkçe) · [English](#english) · [Ekran görüntüleri / Screenshots](#ekran-görüntüleri--screenshots) · [Sürümler / Releases](https://github.com/hculgatay6-code/ViralCut-AI/releases) · [Değişiklik günlüğü / Changelog](CHANGELOG.md)
+
+## v24.0.0 · AI Auto Editor
+
+**AI Stüdyo → Tek Tıkla Shorts** bölümünde yerel analiz başlat. Önerilen kliplerin gerekçelerini incele, kesimleri, sessizlikleri ve altyazı metnini düzenle. Onay düğmesi seçilen kurguyu Profesyonel Editör’e ayrı video, ses ve altyazı katmanları olarak ekler. Tek adımla geri alınabilir. Adaylar ayrı MP4 dosyaları olarak da kaydedilebilir.
+
+Open **AI Studio → One-click Shorts** to analyze local media. Review the candidate scores and edit cut boundaries, pause removal and captions before approving. Approved clips become separate video, audio and caption tracks with one undo step. Individual or batch exports support portrait, square and landscape MP4.
+
+[Kullanım kılavuzu](V24_KULLANIM_KILAVUZU.md) · [Test raporu](V24_TEST_RAPORU.md) · [Performans raporu](V24_PERFORMANCE_RAPORU.md)
 
 ## v23.0.0 · Professional UI & Workflow Studio
 
