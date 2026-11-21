@@ -25,6 +25,8 @@ Taban `feature/v21-effects-studio` dalındaki `6f7a839346ead21c88b144611504b49be
 
 İlk doğrulamada test seçicileri başka bir ses kontrolüyle eşleşti ve eski pencereye bağlı kaldı. Seçiciler panel ve pencereyle sınırlandı, senaryo yeniden çalıştırıldı. İlk ses ölçümü FFmpeg istatistik aralığının yazımı nedeniyle başarısızdı. Yazım düzeltildi ve gerçek MP4 ses akışıyla tekrar ölçüldü.
 
+İlk GitHub v22 koşusu, FFmpeg’in güncel indirme adresinden gelen arşivin beklenen SHA-256 ile eşleşmemesi üzerine durdu. CI adresi, aynı kontrol toplamına sahip sürümlü 9.0.2 arşivine sabitlendi. [İlk koşu](https://github.com/hculgatay6-code/ViralCut-AI/actions/runs/44849766006) · [Gyan 9.0.2](https://github.com/GyanD/codexffmpeg/releases/tag/9.0.2)
+
 ## Lisans ve güvenlik
 
 - Electron sandbox ve context isolation açık, renderer Node entegrasyonu kapalı. Önizleme IPC’si kayıtlı medya kimliği ve üç sayısal profil kabul eder. Ana işlem sabit dizin ve SHA-256 anahtarıyla proxy dosyasını seçer. FFmpeg argüman listesiyle, kabuk açılmadan çalışır.

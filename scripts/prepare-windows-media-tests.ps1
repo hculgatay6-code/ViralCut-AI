@@ -11,7 +11,7 @@ function Get-VerifiedArchive([string]$Url, [string]$File, [string]$Sha256) {
 }
 
 $mediaArchive = Join-Path $scratch 'ffmpeg.zip'
-Get-VerifiedArchive 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' $mediaArchive '60F467265B1E312373DBCD92200C2618A74850F98D3D078E94296BB3FA2047BA'
+Get-VerifiedArchive 'https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip' $mediaArchive '60F467265B1E312373DBCD92200C2618A74850F98D3D078E94296BB3FA2047BA'
 Expand-Archive -LiteralPath $mediaArchive -DestinationPath $scratch
 $bins = Join-Path $scratch 'ffmpeg-9.0.2-essentials_build/bin'
 $mediaTarget = Join-Path $workspace 'desktop-resources/ffmpeg'
