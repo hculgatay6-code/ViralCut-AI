@@ -1,3 +1,5 @@
+param([ValidateRange(10000,600000)][int] $TimeoutMs = 120000)
+
 $ErrorActionPreference = 'Stop'
 
 # Apply the Windows commit limit before the test runner starts any children.
@@ -88,9 +90,10 @@ $job = [IntPtr]::Zero
 try {
   $job = [ViralCutMemoryJob]::Open($proc.Handle, 8GB)
   New-Item -ItemType File -Path $gate | Out-Null
-  if (!$proc.WaitForExit(120000)) { throw 'Memory-limited test timed out.' }
+  $exited = $proc.WaitForExit($TimeoutMs)
   Get-Content -LiteralPath (Join-Path $lease 'stdout'),(Join-Path $lease 'stderr')
   "Job commit limit: 8192 MiB. Peak: $([math]::Round([ViralCutMemoryJob]::Peak($job) / 1MB, 1)) MiB."
+  if (!$exited) { throw 'Memory-limited test timed out.' }
   exit $proc.ExitCode
 } finally {
   if ($job -ne [IntPtr]::Zero) { [void][ViralCutMemoryJob]::CloseHandle($job) }

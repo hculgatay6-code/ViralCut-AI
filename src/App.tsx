@@ -552,7 +552,7 @@ export function App() {
             <button type="button" aria-label={copy.close} onClick={() => editor.setError(null)}><X size={17} /></button>
           </div>
         )}
-        <div className="editor-grid" data-tool={studioTab} data-source-tab={sourceTab || !project.clips.length}>
+        <div className="editor-grid" data-tool={studioTab} data-source-tab={sourceTab || (!project.clips.length && (legacyView || !project.timeline))}>
           {desktop && <>
             <nav className="studio-tools" aria-label={copy.studioMedia}>
               {([['media', copy.studioMedia, Film], ['subtitles', copy.studioSubtitles, ClosedCaption], ['audio', copy.studioAudio, Volume2],
