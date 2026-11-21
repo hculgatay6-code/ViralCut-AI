@@ -9,7 +9,7 @@ Son yerel v23 koşusunda **107 test geçti**, başarısız veya atlanan test yok
 - TypeScript, Vite üretim derlemesi ve Oxlint.
 - Electron’da üç çalışma alanı, klavyeyle panel boyutlandırma, panel görünürlüğü, tema ve dilin kapanıp açılınca korunması. 1366×768 ve 1920×1080 pencere hedeflerinde Electron %100, %125, %150 yakınlaştırma ayarı ile görünürlük ve taşma kontrolü. Bu ölçek koşuları Windows’un DPI ayarını değiştirmedi.
 - Proje kaydetme, arama, son projeden yeniden açma ve kirli projeyi değiştirme uyarısında iptal. Eski proje şemaları ve kurtarma önceki testlerle kontrol edildi.
-- Kare imleci, zaman çizelgesine sığdırma, klavye odağı ve normal düzenleme. 500 klip yükleme ve 45 kaydırma örneği.
+- Kare imleci, klavye odağı ve normal düzenleme. Uzun projelerde sabit yakınlaştırma alt sınırı kaldırıldı. 30. dakikadaki klip sığdırma sonrasında görünür alanın içine geldi. Ayrıca 500 klip ve 45 kaydırma örneği ölçüldü.
 - v22 proxy/orijinal geçişi, kayıp proxy’de geri dönüş, birleşik önizleme önbelleği, AI önerisinin onayla aktarılması ve geri alınması.
 - 20 saniyelik 1920×1080 MP4 dosyasında 600 H.264 video karesi ve AAC akışı. FFprobe ses ve video akışlarının süresini ayrı ayrı 20,000 saniye ölçtü.
 - Başlangıçta, debounced tercih yazımı ile kapanış arasında son panel ayarı kaybolabiliyordu. Kapanışta tercihin diske yazılması beklenerek düzeltildi ve senaryo hemen kapatılıp yeniden açılarak doğrulandı.

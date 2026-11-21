@@ -111,8 +111,10 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, library
   const maxFrame = Math.min(86400 * fps, Math.max(at + 10 * fps, total + 10 * fps, 30 * fps))
   const width = Math.min(220000, Math.round(maxFrame * scale))
   const rulerStep = (Math.ceil(72 / (scale * fps)) || 1) * fps
+  const fitZoom = Math.min(420, Math.max(.001, (viewport.width - 126) * fps / Math.max(total, 1)))
+  const minimumZoom = Math.min(6, fitZoom)
   function fitTimeline() {
-    setZoom(Math.max(6, Math.min(420, Math.floor((viewport.width - 126) * fps / Math.max(total, 1)))))
+    setZoom(fitZoom)
     if (scroll.current) scroll.current.scrollLeft = 0
   }
   const first = useRef(timeline)
@@ -429,8 +431,8 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, library
     } else if (key === 'delete') remove()
     else if (key === 's') split()
     else if (key === 'f') fitTimeline()
-    else if (key === '+' || key === '=') setZoom(value => Math.min(420, Math.round(value * 1.25)))
-    else if (key === '-') setZoom(value => Math.max(6, Math.round(value / 1.25)))
+    else if (key === '+' || key === '=') setZoom(value => Math.min(420, value * 1.25))
+    else if (key === '-') setZoom(value => Math.max(minimumZoom, value / 1.25))
     else if (key === 'arrowleft' || key === 'arrowright') setAt(value => Math.max(0, Math.min(maxFrame, value + (key === 'arrowleft' ? -1 : 1))))
     else return
     event.preventDefault()
@@ -442,7 +444,8 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, library
         disabled={timeline.tracks.length >= 24}>+ {kindLabels[kind][tr ? 0 : 1]}</button>)}
       <button type="button" aria-pressed={snap} onClick={() => setSnap(!snap)}>{t('Hizala', 'Snap')}</button>
       <button type="button" aria-pressed={ripple} onClick={() => setRipple(!ripple)}>Ripple</button>
-      <label>{copy.zoom}<input type="range" min="6" max="420" value={zoom} onChange={event => setZoom(Number(event.currentTarget.value))} /></label>
+      <label>{copy.zoom}<input type="range" min={minimumZoom} max="420" step="any"
+        value={zoom} onChange={event => setZoom(Number(event.currentTarget.value))} /></label>
       <button type="button" aria-keyshortcuts="F" disabled={!total} onClick={fitTimeline}>{t('Zaman çizelgesine sığdır', 'Fit timeline')}</button>
       <output>{frameCode(at, fps)} · {fps} FPS</output>
     </div>
