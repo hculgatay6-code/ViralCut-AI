@@ -1,4 +1,6 @@
 import type { Project } from './model'
+import type { Frame } from '../editor/shorts'
+import type { StudioEffects } from '../editor/effects'
 import { sliceEffects } from '../../server/effect-document.mjs'
 import type { ClipEffect, ClipTransition } from '../../server/effect-document.mjs'
 import { joinAnimation, keyframeLimits, sliceAnimation } from '../../server/keyframes.mjs'
@@ -6,6 +8,7 @@ import type { Animation } from '../../server/keyframes.mjs'
 
 export type TrackKind = 'video' | 'audio' | 'caption' | 'text'
 export type TimelineClip = { id: string; at: number; length: number; mediaId?: string; inFrame?: number
+  reframe?: Omit<Frame, 'mode'>; audioTreatment?: StudioEffects
   text?: string; x?: number; y?: number; scale?: number; opacity?: number; animation?: Animation; effects?: ClipEffect[]; incoming?: ClipTransition }
 export type Track = { id: string; kind: TrackKind; name: string; locked: boolean; hidden: boolean
   muted: boolean; solo: boolean; gain: number; clips: TimelineClip[] }
@@ -171,7 +174,7 @@ export function splitLayerClip(timeline: LayerTimeline, track: Track, clip: Time
 
 export function mergeLayerClip(timeline: LayerTimeline, track: Track, clip: TimelineClip) {
   const next = track.clips.find(item => item.at === clip.at + clip.length)
-  if (!next || next.effects?.length || clip.effects?.length || next.incoming || next.mediaId !== clip.mediaId || next.text !== clip.text || next.scale !== clip.scale ||
+  if (!next || clip.reframe || next.reframe || clip.audioTreatment || next.audioTreatment || next.effects?.length || clip.effects?.length || next.incoming || next.mediaId !== clip.mediaId || next.text !== clip.text || next.scale !== clip.scale ||
       next.x !== clip.x || next.y !== clip.y || next.opacity !== clip.opacity ||
       (clip.inFrame !== undefined && next.inFrame !== clip.inFrame + clip.length)) return null
   const animation = joinAnimation(clip.animation, next.animation, clip.length)

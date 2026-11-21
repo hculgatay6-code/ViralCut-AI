@@ -78,7 +78,8 @@ export async function analyzeShorts(options) {
 export function readShortsAnalysis(settings) {
   const { language, device, analysis, goal, duration, visualMode = 'general', visualDevice = 'auto', director } = settings
   if (!['auto', 'tr', 'en'].includes(language) || !['auto', 'cpu'].includes(device) || !analysis) throw new ExportError('badEdit', 400)
-  if (goal !== undefined && (!(director === true ? [0, 15, 30, 60] : [15, 30, 60]).includes(goal) || !Number.isFinite(duration) || duration <= 0 || duration > 864000)) throw new ExportError('badEdit', 400)
+  const validGoal = Number.isInteger(goal) && ((goal >= 15 && goal <= 60) || (director === true && goal === 0))
+  if (goal !== undefined && (!validGoal || !Number.isFinite(duration) || duration <= 0 || duration > 864000)) throw new ExportError('badEdit', 400)
   if (!['general', 'gaming'].includes(visualMode) || !['auto', 'cpu'].includes(visualDevice)) throw new ExportError('badEdit', 400)
   return { language, device, analysis: validateAnalysis(analysis), goal, duration, visualMode, visualDevice, director: director === true }
 }
@@ -91,7 +92,7 @@ export function batchSize(request) {
 export function validateBatchItem(item, request) {
   const { start, end, frame, remove, overlay } = item ?? {}
   if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end > 864000 || end - start < 14.999 || end - start > 60.001 ||
-      !frame || frame.mode !== 'vertical' || !Array.isArray(remove) || remove.length > 100 ||
+      !frame || (request.creator && frame.mode !== 'vertical') || !Array.isArray(remove) || remove.length > 100 ||
       remove.some(span => !span || span.start < start || span.end > end)) throw new ExportError('badRange')
   const edit = validateEdit({ frame, remove, encoder: request.encoder })
   if (end - start - edit.remove.reduce((sum, span) => sum + span.end - span.start, 0) < 14.999) throw new ExportError('badRange')

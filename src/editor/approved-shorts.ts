@@ -2,6 +2,8 @@ import type { BatchRequest } from '../export/client'
 import type { Project, ProjectClip, ProjectMedia } from '../project/model'
 import type { ClipRange } from './model'
 import type { Cue } from '../subtitles/model'
+import { addLayerClips, emptyTrack, layerDuration, layerFromLegacy, mediaClip } from '../project/layer-model.ts'
+import type { ClipSelection } from '../project/layer-model'
 
 export type ApprovedShorts = Pick<BatchRequest, 'items' | 'resolution' | 'encoder'>
 
@@ -46,4 +48,71 @@ export function appendApprovedShorts(project: Project, source: ProjectMedia, pla
       encoder: plan.encoder,
     } : {}),
   }
+}
+
+export function approveProfessionalPlan(project: Project, source: ProjectMedia, plan: ApprovedShorts, hasAudio = true): Project | undefined {
+  const prepared = appendApprovedShorts({ ...project, clips: [] }, source, plan)
+  if (!prepared) return
+  const base = project.timeline ?? layerFromLegacy(project)
+  const empty = !project.clips.length && !base.tracks.some(track => track.clips.length)
+  const { fps } = base
+  const video = emptyTrack('video', 'Auto · Video')
+  const audio = emptyTrack('audio', 'Auto · Audio')
+  const caption = emptyTrack('caption', 'Auto · CC')
+  const additions: ClipSelection = []
+  let at = layerDuration(base)
+  for (const item of plan.items) {
+    const { mode: _mode, ...reframe } = item.frame
+    const spans = [...item.remove, { start: item.end, end: item.end }]
+    let cursor = item.start
+    for (const pause of spans) {
+      const from = Math.max(0, Math.ceil(cursor * fps - 1e-7))
+      const end = Math.floor(pause.start * fps + 1e-7)
+      cursor = pause.end
+      if (end <= from) continue
+      const length = end - from
+      const clip = mediaClip(source.id, 'video', at, from, length)
+      const zoom = item.effects?.zoom
+      if (zoom && zoom.end > zoom.start) {
+        const curve = 'ease-in-out' as const
+        const value = (frame: number) => {
+          const progress = Math.min(1, Math.max(0, (frame / fps - zoom.start) / (zoom.end - zoom.start)))
+          return zoom.from + (zoom.to - zoom.from) * (1 - Math.cos(Math.PI * progress)) / 2
+        }
+        const times = [0, Math.round(zoom.start * fps) - from, Math.round(zoom.end * fps) - from, length - 1]
+        clip.animation = { scale: [...new Set(times)].filter(time => time >= 0 && time < length)
+          .sort((a, b) => a - b).map(frame => ({ frame, value: value(from + frame), curve })) }
+      }
+      additions.push({ track: video, clip: { ...clip, reframe } })
+      if (hasAudio) {
+        const { noise, normalize, voice, fadeIn, fadeOut } = item.effects ?? {}
+        const audioTreatment = { noise, normalize, voice, fadeIn: item.edgeFade ? (fadeIn ?? .25) : fadeIn,
+          fadeOut: item.edgeFade ? (fadeOut ?? .25) : fadeOut }
+        additions.push({ track: audio, clip: { ...mediaClip(source.id, 'audio', at, from, length),
+          ...(Object.values(audioTreatment).some(Boolean) ? { audioTreatment } : {}) } })
+      }
+      let free = at
+      const rows = [...(item.overlay?.cues ?? [])].sort((a, b) => a.start - b.start)
+      for (const cue of rows) {
+        const begin = Math.max(free, at + Math.round(cue.start * fps) - from)
+        const finish = Math.min(at + length, at + Math.round(cue.end * fps) - from)
+        if (finish <= begin || !cue.text.trim()) continue
+        additions.push({ track: caption, clip: { id: crypto.randomUUID(), at: begin, length: finish - begin, text: cue.text } })
+        free = finish
+        if (additions.length > 500) return
+      }
+      at += length
+    }
+  }
+  if (!additions.length) return
+  const used = new Set(additions.map(entry => entry.track.id))
+  const tracks = [...(empty ? [] : base.tracks), ...[video, audio, caption].filter(track => used.has(track.id))]
+  if (tracks.length > 24) return
+  const timeline = addLayerClips({ fps, tracks }, additions)
+  if (!timeline) return
+  const first = plan.items[0]
+  return { ...project, version: 4, timeline, media: prepared.media,
+    ...(empty ? { frame: { mode: first.frame.mode, zoom: 1, x: 0, y: 0 },
+      appearance: first.overlay?.appearance ?? project.appearance, encoder: plan.encoder,
+      profile: { ...project.profile, resolution: plan.resolution }, burn: used.has(caption.id) } : {}) }
 }

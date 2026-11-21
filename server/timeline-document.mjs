@@ -1,5 +1,7 @@
 import { effectDocument, transitionDocument } from './effect-document.mjs'
 import { keyframeDocument, keyframeLimits } from './keyframes.mjs'
+import { validateEdit } from './shorts.mjs'
+import { validateEffects } from './effects.mjs'
 
 const kinds = ['video', 'audio', 'caption', 'text']
 const frameRates = [24, 25, 30, 50, 60]
@@ -51,10 +53,20 @@ export function timelineDocument(value, hasMedia) {
       requireValid(typeof clip.mediaId === 'string' && hasMedia(clip.mediaId, kind) &&
         Number.isSafeInteger(clip.inFrame) && clip.inFrame >= 0 && clip.inFrame + clip.length <= max)
       const source = { ...base, mediaId: clip.mediaId, inFrame: clip.inFrame }
-      if (kind === 'audio') return source
+      if (kind === 'audio') {
+        const treatment = validateEffects(clip.audioTreatment)
+        if (!treatment) return source
+        const { noise, voice, normalize, fadeIn, fadeOut } = treatment
+        return { ...source, audioTreatment: { noise, voice, normalize, fadeIn, fadeOut } }
+      }
+      let reframe
+      if (clip.reframe !== undefined) {
+        const { mode: _mode, ...crop } = validateEdit({ frame: { ...clip.reframe, mode: 'vertical' } }).frame
+        reframe = crop
+      }
       requireValid(between(clip.x, 0, 1) && between(clip.y, 0, 1) &&
         between(clip.scale, 0.1, 2) && between(clip.opacity, 0, 1))
-      return { ...source, x: clip.x, y: clip.y, scale: clip.scale, opacity: clip.opacity }
+      return { ...source, ...(reframe ? { reframe } : {}), x: clip.x, y: clip.y, scale: clip.scale, opacity: clip.opacity }
     }).sort((a, b) => a.at - b.at)
     requireValid(clips.every((clip, i) => !i || clips[i - 1].at + clips[i - 1].length <= clip.at))
     requireValid(clips.every((clip, i) => !clip.incoming || (i > 0 && clips[i-1].at + clips[i-1].length === clip.at)))

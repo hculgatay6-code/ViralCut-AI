@@ -1,5 +1,5 @@
-appId: com.viralcut.desktop.v23
-productName: ViralCut AI v23
+appId: com.viralcut.desktop.v24
+productName: ViralCut AI v24
 directories:
   output: release
 asar: true

@@ -100,7 +100,7 @@ export function LayerOutput({ project, playhead, seek, monitor, tr, copy }: {
     const active = job.current
     setState({ ...state, phase: 'saving' }); setNotice(''); setFailure(false)
     try {
-      const saved = await localExporter.save(active.id!, 'ViralCut-v23-timeline.mp4', active.controller.signal)
+      const saved = await localExporter.save(active.id!, 'ViralCut-timeline.mp4', active.controller.signal)
       if (job.current !== active) return
       setNotice(copy.exportSaved + ' ' + saved.filename)
       setState(undefined)

@@ -241,7 +241,7 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, library
     if (!expired.current) commit(putLayerClip(timeline, row.id, clip, mode))
   }
 
-  function adjust(key: keyof TimelineClip, value: number | string) {
+  function adjust<Key extends keyof TimelineClip>(key: Key, value: TimelineClip[Key]) {
     if (!active || value === active.clip[key]) return
     const clip = { ...active.clip, [key]: value }
     if (key === 'inFrame' || key === 'length') void trim(active.track, clip, ripple && key === 'length')
@@ -408,6 +408,16 @@ export function LayeredTimeline({ project, copy, tr, inspector, monitor, library
             .map(([key, label, min, max]) => <Field key={key} label={label} min={min} max={max}
               value={Math.round(active.clip[key]! * 100)} set={value => adjust(key, value / 100)} />)}
         </div>}
+        {active.clip.reframe && <div className="layer-properties-grid">
+          {([['x', t('Kadraj X %', 'Crop X %'), -100, 100], ['y', t('Kadraj Y %', 'Crop Y %'), -100, 100],
+            ['zoom', t('Kadraj yakınlaştırma %', 'Crop zoom %'), 100, 300]] as const).map(([key, label, min, max]) =>
+            <Field key={key} label={label} min={min} max={max} value={Math.round(active.clip.reframe![key] * 100)}
+              set={value => adjust('reframe', { ...active.clip.reframe!, fit: undefined, track: undefined, [key]: value / 100 })} />)}
+          {active.clip.reframe.track?.length ? <button type="button" onClick={() => adjust('reframe', { ...active.clip.reframe!, track: undefined })}>
+            {t('Otomatik takibi kaldır', 'Remove automatic tracking')}</button> : null}
+        </div>}
+        {active.clip.audioTreatment && <button type="button" onClick={() => adjust('audioTreatment', undefined)}>
+          {t('Orijinal sese dön', 'Restore original audio')}</button>}
         {active.track.kind === 'audio' && <button type="button" onClick={() => void prepareWave()}>{t('Dalga formu hazırla', 'Prepare waveform')}</button>}
       </fieldset>}
     </div>}

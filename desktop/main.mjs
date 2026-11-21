@@ -72,7 +72,7 @@ function configureTools() {
 }
 
 async function configureModel() {
-  for (const profile of [app.getPath('userData'), join(app.getPath('appData'), 'ViralCut AI v22'), join(app.getPath('appData'), 'ViralCut AI v21'), previousProfile]) {
+  for (const profile of [app.getPath('userData'), join(app.getPath('appData'), 'ViralCut AI v23'), join(app.getPath('appData'), 'ViralCut AI v22'), join(app.getPath('appData'), 'ViralCut AI v21'), previousProfile]) {
     try {
       const settings = JSON.parse(await readFile(join(profile, 'model.json'), 'utf8'))
       if (typeof settings.path === 'string' && await modelVerified(settings.path)) {
@@ -591,7 +591,7 @@ async function startServer() {
 
 async function openEditor() {
   const profile = app.getPath('userData')
-  const previous = ['ViralCut AI v22', 'ViralCut AI v21', 'ViralCut AI v20', 'ViralCut AI v19', 'ViralCut AI Beta']
+  const previous = ['ViralCut AI v23', 'ViralCut AI v22', 'ViralCut AI v21', 'ViralCut AI v20', 'ViralCut AI v19', 'ViralCut AI Beta']
     .map(name => join(app.getPath('appData'), name, 'project-recovery-beta.viralcut'))
   previous.push(join(previousProfile, 'project-recovery-v18.viralcut'))
   ;[diagnostics, settings] = await Promise.all([createDiagnostics(profile), betaSettings(profile)])
@@ -682,9 +682,9 @@ async function shutdown() {
   await markClean?.()
 }
 
-app.setAppUserModelId('com.viralcut.desktop.v21')
+app.setAppUserModelId('com.viralcut.desktop.v24')
 if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
-  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v23'))
+  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v24'))
 }
 if (!app.requestSingleInstanceLock()) app.quit()
 else {

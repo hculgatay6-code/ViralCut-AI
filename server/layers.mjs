@@ -4,7 +4,8 @@ import { animatedVideo, animationExpression } from './animation-render.mjs'
 import { effectFilters, transitionFilter, transitionMotion } from './effect-render.mjs'
 import { buildAss, validateOverlay } from './ass.mjs'
 import { encoderArgs, ExportError, inputOptions, probe, run } from './media.mjs'
-import { outputSize, validateEdit, validateProfile } from './shorts.mjs'
+import { frameFilter, outputSize, validateEdit, validateProfile } from './shorts.mjs'
+import { audioEffects } from './effects.mjs'
 import { ffmpegThreads } from './resource-budget.mjs'
 import { layerLimits, timelineDocument } from './timeline-document.mjs'
 import { proxyProfiles } from './proxy-cache.mjs'
@@ -155,7 +156,15 @@ export async function encodeLayeredSequence({ spans, profile, frame, encoder, ov
       async function overlayClip(entry, background, shift = {}) {
         const {clip,label}=entry
         const renderAt=clip.outgoing ? clip.at+clip.length-1 : start
-        const stream=media.get(clip.path).streams.find(info=>info.codec_type==='video' && info.width && !info.disposition?.attached_pic)
+        let stream=media.get(clip.path).streams.find(info=>info.codec_type==='video' && info.width && !info.disposition?.attached_pic)
+        let normalized = label+'in'
+        if (clip.reframe) {
+          const sourceStart = (clip.inFrame + renderAt - clip.at) / fps
+          const crop = frameFilter({ ...clip.reframe, mode: frame?.mode ?? 'landscape' }, profile, sourceStart)
+          normalized = label+'reframed'
+          filters.push(`[${label}in]setpts=PTS-STARTPTS,${crop}[${normalized}]`)
+          stream = { width, height, sample_aspect_ratio: '1:1' }
+        }
         if (clip.effects?.length) {
           const [a,b]=String(stream.sample_aspect_ratio).split(':').map(Number)
           let ratio=stream.width/stream.height*(a>0&&b>0?a/b:1)
@@ -164,13 +173,13 @@ export async function encodeLayeredSequence({ spans, profile, frame, encoder, ov
           const fx=effectFilters(clip.effects,label,fw,fh,fps,renderAt-clip.at,clip.outgoing?1:end-start)
           if (fx.filters.length) {
             if (fx.script) await writeFile(join(directory,label+'-fx.cmd'),fx.script)
-            filters.push(`[${label}in]fps=${fps}:start_time=0,scale=${fw}:${fh},setsar=1,format=yuv420p,`+
+            filters.push(`[${normalized}]fps=${fps}:start_time=0,scale=${fw}:${fh},setsar=1,format=yuv420p,`+
               (fx.script?`sendcmd=f=${label}-fx.cmd,`:'')+`null[${label}base]`,...fx.filters,
               `[${fx.current}]null[${label}treated]`)
           }
           entry.treated=fx.filters.length>0
         }
-        const input=entry.treated?label+'treated':label+'in'
+        const input=entry.treated?label+'treated':normalized
         const duration=clip.outgoing ? sec : '0.15'
         let composite
         if (clip.animation) {
@@ -213,8 +222,9 @@ export async function encodeLayeredSequence({ spans, profile, frame, encoder, ov
         const volume = clip.animation?.volume
         const gain = volume ? `asetnsamples=n=${48000 / fps}:p=0,volume='if(isnan(t),1,(${animationExpression(volume, start - clip.at, `round(t*${fps})`, 1)}))*${clip.gain}':eval=frame`
           : 'volume=' + clip.gain
+        const treatment = audioEffects(clip.audioTreatment, length, { offset: (start - clip.at) / fps, fullLength: clip.length / fps })
         filters.push(`[${label}in]aresample=48000:first_pts=0,` +
-        `aformat=sample_fmts=fltp:channel_layouts=stereo,${gain},apad,atrim=duration=${sec}[${label}out]`)
+        `aformat=sample_fmts=fltp:channel_layouts=stereo${treatment},${gain},apad,atrim=duration=${sec}[${label}out]`)
       }
       filters.push(audios.length
         ? audios.map(({ label }) => `[${label}out]`).join('') +

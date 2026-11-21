@@ -387,6 +387,10 @@ export function ProjectPanel(props: Props) {
       {notice && <p role={failed ? 'alert' : 'status'}>{notice}</p>}
       {layered && <LayeredTimeline key={props.projectEpoch} project={project} copy={copy} tr={tr} selectLayer={props.selectLayer} libraryHost={props.libraryHost} inspector={props.settingsHost} monitor={props.monitorHost}
         undo={props.undo} redo={props.redo} history={props.history} change={update} waveforms={props.waveforms} stop={stop} />}
+      {!layered && !project.media.length && (props.undo || props.redo) && <div className="shorts-actions">
+        <button className="export-cancel" disabled={!props.undo} onClick={() => props.history('undo')}>{copy.undo}</button>
+        <button className="export-cancel" disabled={!props.redo} onClick={() => props.history('redo')}>{copy.redo}</button>
+      </div>}
       {!layered && !!project.media.length && <>
         <div className="shorts-actions">
           <button className="export-cancel" disabled={!props.undo} onClick={() => props.history('undo')}>{copy.undo}</button>

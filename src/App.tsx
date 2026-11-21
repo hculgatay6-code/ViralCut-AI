@@ -39,7 +39,7 @@ import { MediaPreparation } from './project/MediaPreparation'
 import { defaultLayout, defaultProfile, historyReducer, linkedFiles } from './project/model'
 import type { Project, ProjectClip, ProjectMedia, ProxyResolution, Waveform, WorkspaceLayout } from './project/model'
 import { layerFromLegacy } from './project/layer-model'
-import { appendApprovedShorts } from './editor/approved-shorts'
+import { appendApprovedShorts, approveProfessionalPlan } from './editor/approved-shorts'
 import type { ApprovedShorts } from './editor/approved-shorts'
 
 const emptyCues: Cue[] = []
@@ -72,7 +72,7 @@ export function App() {
   const desktop = !!window.viralCutDesktop
   const [studioTab, setStudioTab] = useState<'media' | 'subtitles' | 'audio' | 'ai' | 'effects' | 'cover' | 'director' | 'performance' | 'copilot' | 'creator' | 'settings' | 'hub'>('media')
   const [beta, setBeta] = useState<BetaPreferences>()
-  const [version, setVersion] = useState('23.0.0')
+  const [version, setVersion] = useState('24.0.0')
   const [workspace, setWorkspace] = useState<'easy' | 'professional' | 'ai'>('easy')
   const [legacyView, setLegacyView] = useState(false)
   const [creatorIntent, setCreatorIntent] = useState<CreatorIntent>()
@@ -267,6 +267,20 @@ export function App() {
     updateProject(current => current === project ? next : current)
     setSourceTab(false)
     positionClip(next.clips[project.clips.length], false, next.media)
+    return true
+  }
+
+  function applyProfessionalPlan(media: ProjectMedia, plan: ApprovedShorts, hasAudio: boolean) {
+    const next = approveProfessionalPlan(project, media, plan, hasAudio)
+    if (!next) return false
+    changeLayout({ library: true, tracks: true, inspector: true })
+    stopAutoPreview()
+    stopSequence()
+    updateProject(current => current === project ? next : current)
+    setSourceTab(false)
+    setLegacyView(false)
+    setStudioTab('media')
+    setWorkspace('professional')
     return true
   }
 
@@ -651,7 +665,7 @@ export function App() {
             id={mountedSource?.id} range={range} language={language} copy={copy} effects={effects} update={updateEffects} /></Suspense>}
           {desktop && <AutoShortsPanel key={autoMedia?.media.id ?? 'auto-empty'} copy={copy} language={language} media={autoMedia?.media}
             duration={autoMedia?.duration ?? 0} appearance={appearance} frame={edit.frame ?? project.frame}
-            open={media => { void chooseAutoSource(media) }} preview={previewAutoClip} stopPreview={stopAutoPreview} apply={applyShorts} />}
+            open={media => { void chooseAutoSource(media) }} preview={previewAutoClip} stopPreview={stopAutoPreview} apply={applyShorts} applyProfessional={applyProfessionalPlan} />}
           {desktop && <DirectorPanel copy={copy} language={language} source={autoMedia}
             open={media => { void chooseAutoSource(media) }} preview={previewAutoClip} load={loadProject} apply={applyShorts} />}
           {desktop && studioTab === 'performance' && <PerformanceCenter language={language} />}

@@ -1,5 +1,5 @@
 import { ExportError, inputOptions, probe, run } from './media.mjs'
-import { keptSpans } from './shorts.mjs'
+import { keptSpans, outputSize } from './shorts.mjs'
 import { loudnessReader } from './studio-audio.mjs'
 
 export async function measureShorts({ input, format, duration, signal, onProgress }) {
@@ -28,6 +28,7 @@ export async function measureShorts({ input, format, duration, signal, onProgres
 }
 
 export async function verifyShort(output, settings, signal, expectAudio = true, result) {
+  const [width, height] = outputSize(settings.edit.frame ?? { mode: 'vertical' }, settings.profile)
   const info = await probe(output, 'mp4', signal)
   const video = info.streams.find(stream => stream.codec_type === 'video')
   const audio = info.streams.find(stream => stream.codec_type === 'audio')
@@ -38,8 +39,8 @@ export async function verifyShort(output, settings, signal, expectAudio = true, 
   const streamDelta = audio ? Math.abs(Number(audio.duration) - Number(video?.duration)) : 0
   if (!Number.isFinite(duration) || Math.abs(duration - length) > .15 || !video || video.codec_name !== 'h264' ||
       (audio && audio.codec_name !== 'aac') || !Number.isFinite(streamDelta) || streamDelta > .15 ||
-      !seconds || Math.abs(frames / seconds - (settings.profile.fps ?? 30)) > .35 || video.width !== settings.profile.resolution ||
-      video.height !== (video.width === 720 ? 1280 : 1920)) throw new ExportError('verifyFailed')
+      !seconds || Math.abs(frames / seconds - (settings.profile.fps ?? 30)) > .35 || video.width !== width ||
+      video.height !== height) throw new ExportError('verifyFailed')
   let blackSeconds = 0
   let audible = false, silentSeconds = 0
   const loudness = result && settings.mastering && audio ? loudnessReader() : undefined

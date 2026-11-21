@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: ['audit/**', 'beta/**', 'feature/v22-performance-ai-studio', 'feature/v23-professional-workspace']
+    branches: ['audit/**', 'beta/**', 'feature/v22-performance-ai-studio', 'feature/v23-professional-workspace', 'feature/v24-ai-auto-editor']
 
 permissions:
   contents: read

@@ -12,7 +12,7 @@ import { editedDuration, pauseSettings, recommendShorts, safePauses } from './au
 import type { Candidate } from './autoShorts'
 import { timecode } from './model'
 import type { ClipRange } from './model'
-import { defaultFrame } from './shorts'
+import { defaultFrame, sizes } from './shorts'
 import type { Frame } from './shorts'
 import { suggestZoom } from './effects'
 import type { StudioEffects } from './effects'
@@ -25,11 +25,13 @@ type Props = {
   preview: (range: ClipRange, cues: Cue[], appearance: Appearance, frame: Frame, remove: ClipRange[], effects?: StudioEffects) => void
   stopPreview: () => void
   apply: (media: ProjectMedia, plan: ApprovedShorts) => boolean
+  applyProfessional: (media: ProjectMedia, plan: ApprovedShorts, hasAudio: boolean) => boolean
 }
 
 const wait = () => new Promise<void>(resolve => setTimeout(resolve, 350))
 
-export function AutoShortsPanel({ copy, language, media, duration, appearance, frame, open, preview, stopPreview, apply }: Props) {
+export function AutoShortsPanel({ copy, language, media, duration, appearance, frame, open, preview, stopPreview, apply, applyProfessional }: Props) {
+  const tr = language === 'tr'
   const bridge = window.viralCutDesktop?.shorts
   const [speechLanguage, setSpeechLanguage] = useState<'auto' | 'tr' | 'en'>('auto')
   const [goal, setGoal] = useState(30)
@@ -46,7 +48,7 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
   const [style, setStyle] = useState<Appearance['style']>(appearance.style)
   const [design, setDesign] = useState<Appearance>()
   const [cover, setCover] = useState<number>()
-  const [outputFrame, setFrame] = useState<Frame>({ ...(frame ?? defaultFrame), mode: 'vertical' })
+  const [outputFrame, setFrame] = useState<Frame>({ ...(frame ?? defaultFrame), mode: 'vertical', track: undefined })
   const [resolution, setResolution] = useState<720 | 1080>(1080)
   const [encoder, setEncoder] = useState<'auto' | 'cpu'>('auto')
   const [progress, setProgress] = useState<number>()
@@ -64,6 +66,7 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
   const [pauseEdit, setPauseEdit] = useState<number>()
   const [checkedItems, setCheckedItems] = useState<number[]>([])
   const operation = useRef<{ controller: AbortController; id?: string }>(null)
+  const lastBatch = useRef<{ request: BatchRequest; numbers: number[] }>(null)
   const busy = dialog || progress !== undefined || !!batch?.active
 
   useEffect(() => {
@@ -100,12 +103,11 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
   }
 
   async function analyze() {
-    if (!media || !duration || operation.current || busy) return
+    if (!media || !duration || operation.current || busy || !Number.isInteger(goal) || goal < 15 || goal > 60) return
     const job: { controller: AbortController; id?: string } = { controller: new AbortController() }
     const signal = job.controller.signal
     operation.current = job
-    stopPreview(); setStage('silence'); setProgress(0); setError(''); setNotice(''); setAnalysis(undefined); setCandidates([]); setBatch(undefined)
-    setSkippedPauses({}); setPauseEdit(undefined); setCueEdit(undefined); setCover(undefined)
+    stopPreview(); setStage('silence'); setProgress(0); setError(''); setNotice('')
     try {
       job.id = (await localExporter.analyzeShorts(media.id, speechLanguage, settings.threshold, settings.minimum, goal, duration, visualMode, visualDevice)).id
       while (!signal.aborted) {
@@ -116,6 +118,7 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
         if (update.phase === 'ready') {
           const result = await localExporter.shortsAnalysis(job.id, signal)
           signal.throwIfAborted()
+          setSkippedPauses({}); setPauseEdit(undefined); setCueEdit(undefined); setCover(undefined)
           setAnalysis(result)
           setShowAll(false)
           setCandidates(result.selection?.candidates ?? recommendShorts(result.cues, result.silences, duration, automatic ? settings.padding : null))
@@ -149,10 +152,28 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
   }
   const valid = (item: Candidate) => Number.isFinite(item.start) && Number.isFinite(item.end) && item.start >= 0 && item.end <= duration + .001 &&
     item.end - item.start <= 60.001 && editedDuration(item, pauses(item)) >= 14.999
-  const framing = (item: Candidate): Frame => track && item.track?.length
+  const framing = (item: Candidate): Frame => outputFrame.mode === 'vertical' && track && item.track?.length
     ? { ...outputFrame, track: item.track } : outputFrame
+  const enhancements = (rows: Cue[], item: Candidate): StudioEffects | undefined => smartZoom || enhance || edgeFade ? {
+    zoom: smartZoom ? suggestZoom(rows, item) : undefined,
+    ...(enhance ? { voice: true, noise: 7, normalize: true } : {}),
+    ...(edgeFade ? { fadeIn: .25, fadeOut: .25 } : {}),
+  } : undefined
+  const targetSize = sizes[outputFrame.mode].map(side => Math.round(side * resolution / 1080)).join(' × ')
 
-  async function exportClips(single?: number, toTimeline = false) {
+  async function startBatch(request: BatchRequest, numbers: number[]) {
+    if (!bridge || busy) return
+    setError(''); setNotice(''); setDialog(true)
+    try {
+      const result = await bridge.start(request)
+      if (result.cancelled) return
+      if (result.error) { setError(copy.exportErrors[result.error] ?? copy.exportErrors.serviceError); return }
+      lastBatch.current = { request, numbers }
+      setCheckedItems(numbers); setFolder(result.folder ?? ''); setBatch(result)
+    } catch { setError(copy.exportErrors.serviceError) } finally { setDialog(false) }
+  }
+
+  async function exportClips(single?: number, destination?: 'easy' | 'professional') {
     const items = candidates.map((item, index) => ({ item, index })).filter(({ item, index }) => single === undefined ? item.selected : index === single)
     if (!bridge || !media || busy || !items.length) return
     if (items.some(({ item }) => !valid(item))) { setError(copy.autoInvalid); return }
@@ -161,21 +182,17 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
       items: items.map(({ item }) => {
         const rows = cues(item)
         return { start: item.start, end: item.end, frame: framing(item), remove: pauses(item), edgeFade,
-          effects: smartZoom || enhance ? { zoom: smartZoom ? suggestZoom(rows, item) : undefined,
-            ...(enhance ? { voice: true, noise: 7, normalize: true } : {}) } : undefined,
+          effects: enhancements(rows, item),
           overlay: showCaptions && rows.length ? { appearance: captions, cues: rows } : undefined }
       }) }
-    if (toTimeline) {
-      if (!apply(media, request)) setError(copy.autoInvalid)
+    if (destination) {
+      const applied = destination === 'easy' ? apply(media, request) : applyProfessional(media, request, analysis?.hasAudio !== false)
+      if (!applied) setError(destination === 'easy' ? copy.autoInvalid :
+        tr ? 'Plan zaman çizelgesine sığmıyor veya kaynak aralığı geçersiz. Daha az klip seçip yeniden dene.' :
+          'The plan exceeds timeline limits or contains an invalid range. Select fewer clips and retry.')
       return
     }
-    setDialog(true)
-    try {
-      const result = await bridge.start(request)
-      if (result.cancelled) return
-      if (result.error) { setError(copy.exportErrors[result.error] ?? copy.exportErrors.serviceError); return }
-      setCheckedItems(items.map(({ index }) => index + 1)); setFolder(result.folder ?? ''); setBatch(result)
-    } catch { setError(copy.exportErrors.serviceError) } finally { setDialog(false) }
+    await startBatch(request, items.map(({ index }) => index + 1))
   }
 
   function updateClip(index: number, patch: Partial<Candidate>) {
@@ -198,7 +215,7 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
       <h3 className="semantic-heading">{copy.semanticHeading}</h3>
       <div className="shorts-actions">
         <button type="button" className="export-cancel" disabled={busy} onClick={() => void choose()}>{copy.autoChoose}</button>
-        <button type="button" className="primary" disabled={busy || !media || !duration} onClick={() => void analyze()}>{copy.autoAnalyze}</button>
+        <button type="button" className="primary" disabled={busy || !media || !duration || !Number.isInteger(goal) || goal < 15 || goal > 60} onClick={() => void analyze()}>{tr ? 'AI ile Videomu Düzenle' : 'Edit my video with AI'}</button>
       </div>
       {media && <p title={media.name}>{media.name} · {timecode(duration)}</p>}
       <div className="auto-settings">
@@ -208,8 +225,10 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
           <option value="auto">{copy.autoDetect}</option><option value="cpu">CPU</option></select></label>
         <label>{copy.autoLanguage}<select disabled={busy} value={speechLanguage} onChange={event => setSpeechLanguage(event.target.value as typeof speechLanguage)}>
           <option value="auto">{copy.autoDetect}</option><option value="tr">Türkçe</option><option value="en">English</option></select></label>
-        <label>{copy.semanticGoal}<select aria-label={copy.semanticGoal} disabled={busy} value={goal} onChange={event => setGoal(Number(event.target.value))}>
-          {[15, 30, 60].map(value => <option key={value} value={value}>{value} {copy.seconds}</option>)}</select></label>
+        <label>{copy.semanticGoal}<input type="number" min={15} max={60} step={1} disabled={busy} value={goal || ''}
+          onChange={event => setGoal(Number(event.target.value))} /></label>
+        <div className="shorts-actions">{[15, 30, 60].map(value => <button key={value} type="button" disabled={busy}
+          aria-pressed={goal === value} onClick={() => setGoal(value)}>{value} {copy.seconds}</button>)}</div>
       </div>
       {progress !== undefined && <div className="export-progress" role="status">
         <span>{copy.analysisStages[stage]} · {Math.floor(progress)}%</span><progress max={100} value={progress} aria-label={copy.autoAnalyze} />
@@ -217,6 +236,7 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
       </div>}
       {analysis && <>
         <p>{analysis.languages.join(' / ')} {analysis.backend && '· ' + analysis.backend} · {analysis.silences.length} {copy.autoPauses}</p>
+        {!!analysis.width && !!analysis.height && <p>{tr ? 'Kaynak' : 'Source'} {analysis.width} × {analysis.height} · {copy.resolution} {targetSize}</p>}
         {analysis.hasAudio === false && <p role="status">{copy.visual.silent}</p>}
         {analysis.speechUnavailable && <p role="status">{copy.visual.speechUnavailable}</p>}
         {analysis.selection && <p role="status">{analysis.selection.mode === 'e5' ? copy.semanticModel : analysis.selection.mode === 'visual' ? copy.visual.visualOnly : copy.semanticFallback}
@@ -258,7 +278,7 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
                 onChange={event => { if (event.target.value !== '') updateClip(index, { [key]: Number(event.target.value) }) }} /></label>)}</div>
             <div className="shorts-actions">
               <button className="export-cancel" disabled={busy || !valid(item)} onClick={() => preview(item, showCaptions ? rows : [], captions, framing(item), pauses(item),
-                smartZoom ? { zoom: suggestZoom(rows, item) } : undefined)}>
+                enhancements(rows, item))}>
                 <Play size={12} /> {copy.preview}</button>
               {!!rows.length && <button className="export-cancel" disabled={busy} onClick={() => setCueEdit(cueEdit === index ? undefined : index)}>{copy.autoEditCaptions}</button>}
               {!!quiet.length && <button className="export-cancel" disabled={busy} onClick={() => setPauseEdit(pauseEdit === index ? undefined : index)}>{copy.silenceHeading} · {pauses(item).length}</button>}
@@ -308,7 +328,10 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
           <label><input type="checkbox" checked={enhance} disabled={busy} onChange={event => setEnhance(event.target.checked)} />{copy.fxAudioApply}</label>
           <label><input type="checkbox" checked={edgeFade} disabled={busy} onChange={event => setEdgeFade(event.target.checked)} />{copy.fxEdge}</label>
           <label>{copy.resolution}<select disabled={busy} value={resolution} onChange={event => setResolution(Number(event.target.value) as typeof resolution)}>
-            <option value={1080}>1080p · 1080 × 1920</option><option value={720}>720p · 720 × 1280</option></select></label>
+            <option value={1080}>1080p</option><option value={720}>720p</option></select></label>
+          <label>{tr ? 'Çıktı oranı' : 'Output aspect ratio'}<select disabled={busy} value={outputFrame.mode}
+            onChange={event => setFrame({ ...outputFrame, track: undefined, mode: event.target.value as Frame['mode'] })}>
+            <option value="vertical">9:16</option><option value="square">1:1</option><option value="landscape">16:9</option></select></label>
           <label>{copy.encodingMode}<select disabled={busy} value={encoder} onChange={event => setEncoder(event.target.value as typeof encoder)}>
             <option value="auto">{copy.encodingAuto}</option><option value="cpu">CPU</option></select></label>
           <label><input type="checkbox" checked={automatic} disabled={busy} onChange={event => setAutomatic(event.target.checked)} />{copy.silenceHeading}</label>
@@ -331,7 +354,13 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
       </details>
       {!!candidates.length && <button className="primary" disabled={busy || !candidates.some(item => item.selected)} onClick={() => void exportClips()}>{copy.autoExport}</button>}
       {!!candidates.length && <button className="export-cancel" disabled={busy || !candidates.some(item => item.selected)}
-        onClick={() => void exportClips(undefined, true)}>{language === 'tr' ? 'Seçilenleri Kolay Editöre ekle' : 'Add selected to Easy Editor'}</button>}
+        onClick={() => void exportClips(undefined, 'easy')}>{tr ? 'Seçilenleri Kolay Editöre ekle' : 'Add selected to Easy Editor'}</button>}
+      {!!candidates.length && <div className="shorts-actions">
+        <p>{tr ? 'Onaylanan kesimler ayrı video, ses ve altyazı kanalları olarak eklenir. Açık bir kurgu varsa projenin oranı ve altyazı ayarları kullanılır.' :
+          'Approval adds separate video, audio and caption tracks. An existing edit uses its current aspect ratio and caption settings.'}</p>
+        <button className="primary" disabled={busy || !candidates.some(item => item.selected)}
+          onClick={() => void exportClips(undefined, 'professional')}>{tr ? 'Planı onayla ve zaman çizelgesine ekle' : 'Approve plan and add to timeline'}</button>
+      </div>}
       {batch?.active && <button className="export-cancel" onClick={() => { void bridge.cancel().catch(() => setError(copy.exportErrors.serviceError)) }}>{copy.exportCancel}</button>}
       {batch && <div className="auto-batch" aria-label={copy.autoExport}>
         {folder && <p title={folder}>{folder}</p>}
@@ -343,6 +372,14 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
           {item.filename && <p>{item.filename} · {item.encoder}</p>}
           {item.error && <p role="alert">{copy.exportErrors[item.error] ?? copy.exportErrors.serviceError}</p>}
         </div>)}
+        {!batch.active && batch.items.some(item => item.phase === 'failed' || item.phase === 'cancelled') &&
+          <button className="export-cancel" disabled={busy} onClick={() => {
+            const previous = lastBatch.current
+            if (!previous) return
+            const pending = batch.items.flatMap((item, index) => item.phase === 'failed' || item.phase === 'cancelled' ? [index] : [])
+            void startBatch({ ...previous.request, items: pending.map(index => previous.request.items[index]) },
+              pending.map(index => previous.numbers[index]))
+          }}>{tr ? 'Tamamlanmayan çıktıları yeniden dene' : 'Retry unfinished outputs'}</button>}
       </div>}
       {notice && <p role="status">{notice}</p>}
       {error && <p role="alert">{error}</p>}
