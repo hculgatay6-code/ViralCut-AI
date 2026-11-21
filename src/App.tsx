@@ -34,9 +34,10 @@ import { defaultAppearance } from './subtitles/model'
 import type { Appearance, Cue } from './subtitles/model'
 import { createCueLookup } from './subtitles/lookup'
 import { ProjectPanel } from './project/ProjectPanel'
+import { MediaLibrary } from './project/MediaLibrary'
 import { MediaPreparation } from './project/MediaPreparation'
-import { defaultProfile, historyReducer, linkedFiles } from './project/model'
-import type { Project, ProjectClip, ProjectMedia, ProxyResolution, Waveform } from './project/model'
+import { defaultLayout, defaultProfile, historyReducer, linkedFiles } from './project/model'
+import type { Project, ProjectClip, ProjectMedia, ProxyResolution, Waveform, WorkspaceLayout } from './project/model'
 import { layerFromLegacy } from './project/layer-model'
 import { appendApprovedShorts } from './editor/approved-shorts'
 import type { ApprovedShorts } from './editor/approved-shorts'
@@ -69,17 +70,37 @@ export function App() {
   const [showSample, setShowSample] = useState(true)
   const [dragging, setDragging] = useState(false)
   const desktop = !!window.viralCutDesktop
-  const [studioTab, setStudioTab] = useState<'media' | 'subtitles' | 'audio' | 'ai' | 'effects' | 'cover' | 'director' | 'performance' | 'copilot' | 'creator' | 'settings'>('media')
+  const [studioTab, setStudioTab] = useState<'media' | 'subtitles' | 'audio' | 'ai' | 'effects' | 'cover' | 'director' | 'performance' | 'copilot' | 'creator' | 'settings' | 'hub'>('media')
   const [beta, setBeta] = useState<BetaPreferences>()
-  const [version, setVersion] = useState('22.0.0')
+  const [version, setVersion] = useState('23.0.0')
   const [workspace, setWorkspace] = useState<'easy' | 'professional' | 'ai'>('easy')
   const [legacyView, setLegacyView] = useState(false)
   const [creatorIntent, setCreatorIntent] = useState<CreatorIntent>()
   const [copilotProject, setCopilotProject] = useState(0)
   const [safeGuides, setSafeGuides] = useState(false)
-  const [leftSize, setLeftSize] = useState(282)
-  const [rightSize, setRightSize] = useState(255)
-  const [timelineSize, setTimelineSize] = useState(300)
+  const [layout, setLayout] = useState(defaultLayout)
+  const [layoutReady, setLayoutReady] = useState(false)
+  const [layoutError, setLayoutError] = useState(false)
+  const projectBridge = window.viralCutDesktop?.projects
+  const flushLayout = useCallback(async () => {
+    if (layoutReady && projectBridge) await projectBridge.saveLayout(layout)
+  }, [layout, layoutReady, projectBridge])
+  const [hubHost, setHubHost] = useState<HTMLDivElement | null>(null)
+  const changeLayout = (patch: Partial<WorkspaceLayout>) => setLayout(previous => ({ ...previous, ...patch }))
+  useEffect(() => {
+    let active = true
+    void projectBridge?.workspace().then(data => {
+      if (active && data.layout) { setLayout(data.layout); setLayoutReady(true) }
+    }).catch(() => { if (active) setLayoutError(true) })
+    return () => { active = false }
+  }, [projectBridge])
+  useEffect(() => {
+    if (!layoutReady) return
+    const timer = window.setTimeout(() => {
+      void projectBridge?.saveLayout(layout).then(result => setLayoutError(!result.saved)).catch(() => setLayoutError(true))
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [layoutReady, layout, projectBridge])
   const [sourceTab, setSourceTab] = useState(false)
   const [monitorHost, setMonitorHost] = useState<HTMLDivElement | null>(null)
   const [effectHost,setEffectHost]=useState<HTMLDivElement|null>(null)
@@ -223,6 +244,8 @@ export function App() {
   }
 
   function switchWorkspace(next: typeof workspace) {
+    changeLayout({ library: true, tracks: true })
+    setSourceTab(false)
     stopAutoPreview()
     stopSequence()
     setWorkspace(next)
@@ -446,7 +469,8 @@ export function App() {
 
   return (
     <div className={'app' + (desktop ? ' studio' : '')}
-      style={desktop ? { '--studio-left': leftSize + 'px', '--studio-right': rightSize + 'px', '--studio-timeline': timelineSize + 'px' } as CSSProperties : undefined}
+      data-theme={layout.theme} data-library={layout.library} data-inspector={layout.inspector} data-tracks={layout.tracks}
+      style={desktop ? { '--studio-left': layout.left + 'px', '--studio-right': layout.right + 'px', '--studio-timeline': layout.timeline + 'px' } as CSSProperties : undefined}
       onDragOver={event => {
         if (event.dataTransfer.types.includes('Files')) event.preventDefault()
       }}
@@ -467,10 +491,30 @@ export function App() {
             {language === 'tr' ? 'AI Stüdyo' : 'AI Studio'}</button>
         </nav>}
         <div className="top-actions">
+          {desktop && <button className="export-cancel" onClick={() => { changeLayout({ library: true }); setStudioTab('hub') }}>{language === 'tr' ? 'Projeler' : 'Projects'}</button>}
+          {desktop && <details className="layout-menu">
+            <summary aria-label={language === 'tr' ? 'Panel düzeni' : 'Panel layout'}><SlidersHorizontal size={16} /></summary>
+            <div className="panel layout-popover">
+              <label>{language === 'tr' ? 'Tema' : 'Theme'} <select value={layout.theme} onChange={event => changeLayout({ theme: event.target.value === 'light' ? 'light' : 'dark' })}>
+                <option value="dark">{language === 'tr' ? 'Koyu' : 'Dark'}</option><option value="light">{language === 'tr' ? 'Açık' : 'Light'}</option>
+              </select></label>
+              {([['library', copy.studioMedia], ['inspector', copy.studioInspector], ['tracks', copy.timeline]] as const).map(([key, label]) =>
+                <label key={key}><input type="checkbox" checked={layout[key]} onChange={event => changeLayout({ [key]: event.target.checked })} />{label}</label>)}
+              <button className="export-cancel" onClick={() => setLayout({ ...defaultLayout, theme: layout.theme })}>{language === 'tr' ? 'Düzeni sıfırla' : 'Reset layout'}</button>
+              {layoutError && <p role="alert">{language === 'tr' ? 'Düzen tercihleri kaydedilemedi.' : 'Layout preferences could not be saved.'}</p>}
+            </div>
+          </details>}
           <div className="locale" role="group" aria-label={copy.language}>
             <Globe2 size={15} aria-hidden="true" />
-            <button type="button" lang="tr" aria-label="Türkçe" aria-pressed={language === 'tr'} onClick={() => setLanguage('tr')}>TR</button>
-            <button type="button" lang="en" aria-label="English" aria-pressed={language === 'en'} onClick={() => setLanguage('en')}>EN</button>
+            {(['tr', 'en'] as const).map(value => <button key={value} type="button" lang={value} aria-label={value === 'tr' ? 'Türkçe' : 'English'}
+              aria-pressed={language === value} onClick={() => {
+                setLanguage(value)
+                if (beta) {
+                  const next = { ...beta, language: value }
+                  setBeta(next)
+                  void window.viralCutDesktop?.beta.save(next).catch(() => setLayoutError(true))
+                }
+              }}>{value.toUpperCase()}</button>)}
           </div>
           <button type="button" className="primary" onClick={() => picker.current?.click()}>
             <FolderOpen size={17} />{copy.open}
@@ -505,9 +549,9 @@ export function App() {
                 ['settings', language === 'tr' ? 'Ayarlar' : 'Settings', SlidersHorizontal]] as const).map(([id, label, Icon]) =>
                 <button key={id} aria-pressed={studioTab === id} onClick={() => { if (id !== 'ai' && id !== 'director') stopAutoPreview(); setStudioTab(id) }}><Icon size={15} />{label}</button>)}
             </nav>
-            <div className="studio-split left"><StudioDivider name={copy.studioResize + ' · ' + copy.studioMedia} axis="width" value={leftSize} min={222} max={408} resize={setLeftSize} /></div>
-            <div className="studio-split right"><StudioDivider name={copy.studioResize + ' · ' + copy.studioInspector} axis="width" value={rightSize} min={215} max={375} resize={setRightSize} invert /></div>
-            <div className="studio-split bottom"><StudioDivider name={copy.studioResize + ' · ' + copy.timeline} axis="height" value={timelineSize} min={220} max={495} resize={setTimelineSize} invert /></div>
+            <div className="studio-split left"><StudioDivider name={copy.studioResize + ' · ' + copy.studioMedia} axis="width" value={layout.left} min={222} max={408} resize={left => changeLayout({ left })} /></div>
+            <div className="studio-split right"><StudioDivider name={copy.studioResize + ' · ' + copy.studioInspector} axis="width" value={layout.right} min={215} max={375} resize={right => changeLayout({ right })} invert /></div>
+            <div className="studio-split bottom"><StudioDivider name={copy.studioResize + ' · ' + copy.timeline} axis="height" value={layout.timeline} min={220} max={495} resize={timeline => changeLayout({ timeline })} invert /></div>
           </>}
           <section className="panel viewer" aria-labelledby="preview-heading" onDrop={handleDrop}
             onDragEnter={event => {
@@ -591,6 +635,11 @@ export function App() {
             <Timeline editor={editor} copy={copy} cues={cues} silence={silenceMarkers} removals={edit.remove} />
           </div>
           <div className="studio-tool-content">
+          {desktop && studioTab === 'hub' && <div ref={setHubHost} />}
+          {desktop && workspace === 'ai' && <nav className="workspace-steps" aria-label={language === 'tr' ? 'AI araçları' : 'AI tools'}>
+            {([['ai', copy.autoShorts], ['director', language === 'tr' ? 'Yönetmen' : 'Director'], ['subtitles', copy.studioSubtitles], ['copilot', 'Copilot']] as const)
+              .map(([tool, label]) => <button key={tool} className="export-cancel" aria-pressed={studioTab === tool} onClick={() => { stopAutoPreview(); setStudioTab(tool) }}>{label}</button>)}
+          </nav>}
           {desktop && studioTab === 'cover' && <section className="panel"><header className="panel-header"><h2>{language === 'tr' ? 'Kapak stüdyosu' : 'Cover studio'}</h2></header>
             {source && metadata ? <CoverStudio key={source.url} language={language} source={source.url} range={range} cues={cues} /> : <p>{copy.emptyHelp}</p>}
           </section>}
@@ -655,15 +704,15 @@ export function App() {
             <div className="studio-library-body">
               {source && !mountedSource && <p>{source.file.name}</p>}
               {!source && !project.media.length && <p>{copy.emptyHelp}</p>}
-              {project.media.map(media => <button key={media.id} type="button" draggable={!media.missing && !!project.timeline} disabled={media.missing}
-                onDragStart={event => {
-                  event.dataTransfer.setData('application/x-viralcut-media', media.id)
-                  event.dataTransfer.effectAllowed = 'copy'
-                }}
-                onClick={() => {
-                  const clip = project.clips.find(clip => clip.mediaId === media.id)
-                  if (clip) { stopSequence(); positionClip(clip, false) }
-                }}><Film size={14} /><span>{media.name}</span></button>)}
+              {!!project.media.length && <MediaLibrary project={project} selected={projectMedia?.id} tr={language === 'tr'}
+                open={media => {
+                  const clip = project.clips.find(item => item.mediaId === media.id)
+                  stopSequence(); stopAutoPreview()
+                  if (clip) positionClip(clip, false)
+                  else { pending.current = null; setProxyId(undefined); editor.openLinked(media) }
+                }} remove={id => updateProject(value => value.clips.some(clip => clip.mediaId === id) ||
+                  value.timeline?.tracks.some(track => track.clips.some(clip => clip.mediaId === id)) ? value
+                  : { ...value, media: value.media.filter(item => item.id !== id) })} />}
               <MediaPreparation key={projectMedia?.id ?? 'none'} media={projectMedia} copy={copy} proxy={usingProxy?.height}
                 selectProxy={selectProxy} setWaveform={storeWaveform} kind="proxy" tr={language === 'tr'} />
             </div></section>}
@@ -721,6 +770,7 @@ export function App() {
           </aside>
           {!desktop && singleExport}
           <ProjectPanel libraryHost={effectHost} selectLayer={setLayerSelected} project={project} copy={copy} media={projectMedia} current={currentClip} setCurrent={setCurrentClip}
+            hubHost={hubHost} flushLayout={flushLayout} openTool={tool => { if (tool === 'ai') switchWorkspace('ai'); else setStudioTab('subtitles') }}
             legacyView={legacyView} switchEditView={layered => switchWorkspace(layered ? 'professional' : 'easy')}
             autosaveInterval={beta?.interval ?? 5} language={language} projectEpoch={copilotProject}
             undo={!!history.previous.length} redo={!!history.next.length} history={type => { stopSequence(); dispatch({ type }) }}

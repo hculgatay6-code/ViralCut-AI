@@ -1,5 +1,13 @@
 # Değişiklik günlüğü
 
+## v23.0.0
+
+- Kalıcı koyu/açık tema, panel boyut ve görünürlük tercihleri, klavyeyle boyutlandırma ve düzen sıfırlama.
+- Proje Merkezi, aranabilir son proje listesi, üç proje oranı ve kaydedilmemiş değişikliklerde değiştirme onayı.
+- Arama, tür filtresi, sıralama, sınırlı küçük resim önbelleği ve görünür satırlarla medya kütüphanesi.
+- Zaman çizelgesine sığdırma ve yakınlaştırma kısayolları, katmanlı işleme süresi ve tahmini kalan süre.
+- AI Stüdyo’da mevcut Shorts, Yönetmen, altyazı ve Copilot araçlarına ortak gezinme.
+
 ## v22.0.0
 
 - Kalıcı 360p, 540p ve 720p düzenleme proxy’leri, disk alanı kontrolü, iptal, yeniden deneme, kaynak değişikliği doğrulaması ve özgün medyaya geri dönüş.

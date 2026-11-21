@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: ['audit/**', 'beta/**', 'feature/v22-performance-ai-studio']
+    branches: ['audit/**', 'beta/**', 'feature/v22-performance-ai-studio', 'feature/v23-professional-workspace']
 
 permissions:
   contents: read
@@ -54,3 +54,7 @@ jobs:
       - name: Verify v22 preview and proxy workflows in Electron
         shell: pwsh
         run: node scripts/verify-v22-studio.mjs
+
+      - name: Verify v23 workspace in Electron
+        shell: pwsh
+        run: node scripts/verify-v23-workspace.mjs

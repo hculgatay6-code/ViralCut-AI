@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { chromium } from 'playwright'
 
-const [executable, fixture] = process.argv.slice(2)
+const [executable, fixture, version = '22.0.0'] = process.argv.slice(2)
 assert.ok(executable && fixture, 'Pass the Portable EXE and a local MP4')
 const holder = createServer()
 await new Promise(resolve => holder.listen(0, '127.0.0.1', resolve))
@@ -39,7 +39,7 @@ try {
     page = browser.contexts()[0]?.pages().find(item => item.url().startsWith('http://127.0.0.1:'))
     if (!page) await delay(250, undefined, { signal })
   }
-  await page.getByText('v22.0.0', { exact: true }).waitFor()
+  await page.getByText('v' + version, { exact: true }).waitFor()
   console.log('Portable startup including extraction ms', Math.round(performance.now() - started))
   origin = new URL(page.url()).origin
   assert.equal((await fetch(origin)).status, 403)

@@ -64,6 +64,10 @@ contextBridge.exposeInMainWorld('viralCutDesktop', {
     save: value => ipcRenderer.invoke('viralcut:effects-library-save', value),
   },
   projects: {
+    workspace: () => ipcRenderer.invoke('viralcut:workspace-read'),
+    saveLayout: layout => ipcRenderer.invoke('viralcut:workspace-save', layout),
+    recent: id => ipcRenderer.invoke('viralcut:project-recent', id),
+    confirmReplace: language => ipcRenderer.invoke('viralcut:project-replace-confirm', language),
     onClose: callback => {
       const listener = () => callback()
       ipcRenderer.on('viralcut:flush-recovery', listener)

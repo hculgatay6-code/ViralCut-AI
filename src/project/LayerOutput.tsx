@@ -20,6 +20,7 @@ export function LayerOutput({ project, playhead, seek, monitor, tr, copy }: {
   const [proxy, setProxy] = useState<ProxyResolution>()
   const [seconds, setSeconds] = useState(8)
   const [loop, setLoop] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
   const video = useRef<HTMLVideoElement>(null)
   const lastFrame = useRef<number | null>(null)
   const total = layerDuration(project.timeline!)
@@ -63,6 +64,8 @@ export function LayerOutput({ project, playhead, seek, monitor, tr, copy }: {
     const from = Math.min(playhead, total - 1)
     const range = preview ? { from, to: Math.min(total, from + seconds * fps) } : undefined
     setState({ phase: 'rendering' }); setNotice(''); setFailure(false)
+    setElapsed(0)
+    const started = performance.now()
     try {
       await prior
       signal.throwIfAborted()
@@ -70,6 +73,7 @@ export function LayerOutput({ project, playhead, seek, monitor, tr, copy }: {
       while (!signal.aborted) {
         const status = await localExporter.status(active.id, signal)
         signal.throwIfAborted()
+        setElapsed((performance.now() - started) / 1000)
         if (status.phase === 'failed') throw new ExportClientError(status.error ?? 'encodeFailed')
         if (status.phase === 'ready') {
           setState({ phase: preview ? 'preview' : 'ready', status, range })
@@ -96,7 +100,7 @@ export function LayerOutput({ project, playhead, seek, monitor, tr, copy }: {
     const active = job.current
     setState({ ...state, phase: 'saving' }); setNotice(''); setFailure(false)
     try {
-      const saved = await localExporter.save(active.id!, 'ViralCut-v22-timeline.mp4', active.controller.signal)
+      const saved = await localExporter.save(active.id!, 'ViralCut-v23-timeline.mp4', active.controller.signal)
       if (job.current !== active) return
       setNotice(copy.exportSaved + ' ' + saved.filename)
       setState(undefined)
@@ -113,6 +117,9 @@ export function LayerOutput({ project, playhead, seek, monitor, tr, copy }: {
 
   const canStart = !!total && state?.phase !== 'rendering' && state?.phase !== 'saving'
   const status = state?.status
+  const percent = status?.progress ?? 0
+  const eta = elapsed > 2 && percent >= 5 && percent < 96 && !status?.waiting
+    ? Math.ceil(elapsed * (100 - percent) / percent) : undefined
   const range = state?.range
   const player = state?.phase === 'preview' && range && <div className="layer-monitor">
     <div><strong>{tr ? 'Birleşik önizleme' : 'Composite preview'}</strong>
@@ -150,7 +157,8 @@ export function LayerOutput({ project, playhead, seek, monitor, tr, copy }: {
       {!!state && state.phase !== 'preview' && state.phase !== 'saving' && <button type="button"
         onClick={() => { void release(); setState(undefined); setNotice(copy.exportCancel) }}>{copy.exportCancel}</button>}
       {state?.phase === 'rendering' && <label role="status">{status?.waiting ? (tr ? 'Sırada' : 'Queued') : copy.exportProcessing}
-        <progress max={100} value={status?.progress ?? 0} /> {Math.floor(status?.progress ?? 0)}%</label>}
+        <progress max={100} value={percent} /> {Math.floor(percent)}% · {elapsed.toFixed(1)} s
+        {eta !== undefined && <span> · {tr ? 'Tahmini kalan' : 'Estimated remaining'} {eta} s</span>}</label>}
       {status?.verification && <span>{copy.verifiedOutput} · {status.verification.width}×{status.verification.height} · {status.encoder}</span>}
       {state?.phase === 'preview' && status?.cacheHit && <span role="status">{tr ? 'Önbellekten' : 'From cache'}</span>}
       {state?.phase === 'preview' && proxy && <span>{status?.proxyCount

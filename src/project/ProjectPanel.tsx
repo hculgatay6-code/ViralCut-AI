@@ -4,7 +4,9 @@ import type { ClipRange } from '../editor/model'
 import { timecode } from '../editor/model'
 import type { Copy, Language } from '../i18n'
 import type { Project, Profile, ProjectMedia, ProjectClip, Waveform } from './model'
-import { moveClip, subtractSpeech, timelineLayout } from './model'
+import { defaultProfile, moveClip, subtractSpeech, timelineLayout } from './model'
+import { defaultAppearance } from '../subtitles/model'
+import type { RecentProject } from './model'
 import { ExportClientError, localExporter } from '../export/client'
 import type { ExportJob } from '../export/client'
 
@@ -15,6 +17,8 @@ type Props = {
   project: Project; copy: Copy; media?: ProjectMedia; undo: boolean; redo: boolean; playhead: number
   autosaveInterval: number; language: Language; projectEpoch: number
   legacyView: boolean; switchEditView: (layered: boolean) => void
+  hubHost: HTMLDivElement | null; openTool: (tool: 'ai' | 'subtitles') => void
+  flushLayout: () => Promise<void>
   playback: boolean; stop: () => void; play: () => void; select: (clip: ProjectClip) => void
   current: string; setCurrent: (id: string) => void
   update: (apply: (project: Project) => Project) => void; load: (project: Project) => void
@@ -198,6 +202,14 @@ export function ProjectPanel(props: Props) {
   const [saved, setSaved] = useState<Project>()
   const [autosaveFailed, setAutosaveFailed] = useState(false)
   const [dialog, setDialog] = useState(false)
+  const [recent, setRecent] = useState<RecentProject[]>([])
+  const [search, setSearch] = useState('')
+  const [aspect, setAspect] = useState<'landscape' | 'vertical' | 'square'>('landscape')
+  const checkpoint = useRef<Project>(project)
+  useEffect(() => { checkpoint.current = project }, [props.projectEpoch])
+  useEffect(() => {
+    if (props.hubHost) void bridge?.workspace().then(state => setRecent(state.recent ?? [])).catch(() => {})
+  }, [bridge, props.hubHost, dialog])
   const clip = project.clips.find(item => item.id === current)
   const speechCues = media?.cues ?? []
   const layout = useMemo(() => timelineLayout(project.clips, project.media, project.profile.fps), [project.clips, project.media, project.profile.fps])
@@ -215,8 +227,9 @@ export function ProjectPanel(props: Props) {
     await writing.current
   }, [bridge, autosaveInterval])
   useEffect(() => bridge?.onClose(() => {
-    void Promise.resolve(writing.current).then(autosave).finally(() => bridge.confirmClose().catch(() => {}))
-  }), [bridge, autosave])
+    void Promise.allSettled([props.flushLayout(), Promise.resolve(writing.current).then(autosave)])
+      .then(() => bridge.confirmClose().catch(() => {}))
+  }), [bridge, autosave, props.flushLayout])
   useEffect(() => { if (bridge) void bridge.hasRecovery().then(setRecovery).catch(() => {}) }, [bridge])
   useEffect(() => {
     if (!bridge || !autosaveInterval || recovery.available) return
@@ -226,10 +239,14 @@ export function ProjectPanel(props: Props) {
   useEffect(() => { setSelectedSpeech(new Set()); setSpeechPage(0) }, [media?.id, media?.cues])
   if (!bridge) return null
 
-  async function projectDialog(kind: 'add' | 'open' | 'save' | 'recover' | 'relink', id?: string) {
+  async function projectDialog(kind: 'add' | 'open' | 'save' | 'recover' | 'relink' | 'new' | 'recent', id?: string) {
     if (!bridge || dialog) return
     setDialog(true); setNotice(''); setFailed(false)
     try {
+      if (['open', 'recover', 'new', 'recent'].includes(kind) && ref.current !== checkpoint.current &&
+          (ref.current.media.length || ref.current.clips.length || ref.current.timeline?.tracks.some(track => track.clips.length))) {
+        if (!(await bridge.confirmReplace(language)).confirmed) return
+      }
       if (kind === 'add') {
         const result = await bridge.addMedia()
         if (result.media?.length) addMedia(result.media)
@@ -240,11 +257,15 @@ export function ProjectPanel(props: Props) {
         const selected = result.media
         if (selected) update(value => ({ ...value, media: value.media.map(item => item.id === id ? { ...selected, cues: item.cues } : item) }))
       } else if (kind === 'save') {
-        const result = await bridge.save(ref.current)
+        const snapshot = ref.current
+        const result = await bridge.save(snapshot)
         if (result.error) throw Error()
-        if (result.filename) setNotice(copy.exportSaved + ' ' + result.filename)
+        if (result.filename) { checkpoint.current = snapshot; setNotice(copy.exportSaved + ' ' + result.filename) }
+      } else if (kind === 'new') {
+        props.load({ version: 1, media: [], clips: [], profile: defaultProfile, encoder: 'auto', burn: true,
+          appearance: defaultAppearance, frame: { mode: aspect, zoom: 1, x: 0, y: 0 } })
       } else {
-        const result = kind === 'recover' ? await bridge.recover() : await bridge.open()
+        const result = kind === 'recover' ? await bridge.recover() : kind === 'recent' && id ? await bridge.recent(id) : await bridge.open()
         if (result.error) throw Error()
         if (result.project) {
           props.load(result.project); setRecovery({}); setNotice(copy.projectLoaded)
@@ -332,6 +353,29 @@ export function ProjectPanel(props: Props) {
       event.preventDefault(); split()
     }
   }}>
+    {props.hubHost && createPortal(<section className="panel project-hub" aria-label={tr ? 'Proje merkezi' : 'Project hub'}>
+      <header className="panel-header"><h2>{tr ? 'Proje merkezi' : 'Project hub'}</h2></header>
+      <div className="project-body">
+        <label>{tr ? 'Kare oranı' : 'Aspect ratio'} <select value={aspect}
+          onChange={event => setAspect(event.target.value as typeof aspect)}>
+          <option value="landscape">16:9</option><option value="vertical">9:16</option><option value="square">1:1</option></select></label>
+        <div className="shorts-actions">
+          <button className="primary" disabled={dialog} onClick={() => void projectDialog('new')}>{tr ? 'Yeni proje' : 'New project'}</button>
+          <button className="export-cancel" disabled={dialog} onClick={() => void projectDialog('open')}>{tr ? 'Dosyadan aç' : 'Open from file'}</button>
+        </div>
+        <input type="search" aria-label={tr ? 'Son projeleri ara' : 'Search recent projects'} value={search}
+          placeholder={tr ? 'Son projeleri ara' : 'Search recent projects'} onChange={event => setSearch(event.target.value)} />
+        {recent.filter(row => row.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).map(row =>
+          <button className="export-cancel" key={row.id} disabled={dialog} onClick={() => void projectDialog('recent', row.id)}>{row.name}</button>)}
+        <details><summary>{tr ? 'İlk adımlar' : 'Getting started'}</summary>
+          <p>{tr ? 'Videoyu önizleme alanına sürükle. Projeye eklemek ve kaydetmek için zaman çizelgesinin üstündeki düğmeleri kullan.'
+            : 'Drop a video on the preview. Use the controls above the timeline to add media to your project and save.'}</p>
+          <div className="shorts-actions"><button className="export-cancel" onClick={() => props.openTool('ai')}>{copy.autoShorts}</button>
+            <button className="export-cancel" onClick={() => props.openTool('subtitles')}>{copy.studioSubtitles}</button></div>
+        </details>
+        {notice && <p role={failed ? 'alert' : 'status'}>{notice}</p>}
+      </div>
+    </section>, props.hubHost)}
     <header className="panel-header"><h2>{copy.projectHeading}</h2><span>{timecode(layered ? layerDuration(layered) / layered.fps : total)}</span></header>
     <div className="project-body">
       {buttons}

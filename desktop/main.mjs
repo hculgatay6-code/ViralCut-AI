@@ -24,6 +24,7 @@ import { createCalendar, prepareCreator } from './creator.mjs'
 import { creatorProfile } from '../server/creator.mjs'
 import { createYouTube } from './youtube.mjs'
 import { betaSettings, checkGitHubRelease, saveDiagnosticReport, startSessionMarker } from './beta.mjs'
+import { openWorkspace } from './workspace.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const resources = app.isPackaged ? process.resourcesPath : join(root, 'desktop-resources')
@@ -42,6 +43,7 @@ let creatorOutput, calendar, youtube
 let projects, previews, diagnostics
 let cache, budget, performanceMonitor
 let settings, markClean
+let workspace
 let quitting = false
 let choosingModel = false
 let saving = false
@@ -70,7 +72,7 @@ function configureTools() {
 }
 
 async function configureModel() {
-  for (const profile of [app.getPath('userData'), join(app.getPath('appData'), 'ViralCut AI v21'), previousProfile]) {
+  for (const profile of [app.getPath('userData'), join(app.getPath('appData'), 'ViralCut AI v22'), join(app.getPath('appData'), 'ViralCut AI v21'), previousProfile]) {
     try {
       const settings = JSON.parse(await readFile(join(profile, 'model.json'), 'utf8'))
       if (typeof settings.path === 'string' && await modelVerified(settings.path)) {
@@ -422,7 +424,28 @@ function registerDialogs() {
   safeHandle('project-open', async () => {
     const result = await dialog.showOpenDialog(win, { title: 'ViralCut projesini aç',
       filters: projectFilter, properties: ['openFile'] })
-    return result.canceled ? { cancelled: true } : { project: await projects.open(result.filePaths[0]) }
+    if (result.canceled) return { cancelled: true }
+    const path = result.filePaths[0]
+    const project = await projects.open(path)
+    await workspace.remember(path)?.catch(() => {})
+    return { project }
+  }, true)
+  safeHandle('workspace-read', () => workspace.read())
+  safeHandle('workspace-save', async layout => { await workspace.save(layout); return { saved: true } })
+  safeHandle('project-recent', async id => {
+    const path = workspace.path(id)
+    if (!path) return { error: 'badProject' }
+    const project = await projects.open(path)
+    await workspace.remember(path)?.catch(() => {})
+    return { project }
+  }, true)
+  safeHandle('project-replace-confirm', async language => {
+    const tr = language === 'tr'
+    const result = await dialog.showMessageBox(win, { type: 'warning', defaultId: 0, cancelId: 0,
+      message: tr ? 'Kaydedilmemiş değişiklikler var.' : 'There are unsaved changes.',
+      detail: tr ? 'Düzenlemeleri saklamak için iptal edip önce projeyi kaydet.' : 'Cancel and save the project first to keep your edits.',
+      buttons: tr ? ['İptal', 'Kaydetmeden devam et'] : ['Cancel', 'Continue without saving'] })
+    return { confirmed: result.response === 1 }
   }, true)
   safeHandle('project-save', async state => {
     const result = await dialog.showSaveDialog(win, { title: 'ViralCut projesini kaydet',
@@ -430,6 +453,7 @@ function registerDialogs() {
     if (result.canceled) return { cancelled: true }
     const path = result.filePath.toLowerCase().endsWith('.viralcut') ? result.filePath : result.filePath + '.viralcut'
     await projects.save(path, state)
+    await workspace.remember(path)?.catch(() => {})
     return { filename: basename(path) }
   }, true)
   safeHandle('project-autosave', async state => {
@@ -567,10 +591,11 @@ async function startServer() {
 
 async function openEditor() {
   const profile = app.getPath('userData')
-  const previous = ['ViralCut AI v21', 'ViralCut AI v20', 'ViralCut AI v19', 'ViralCut AI Beta']
+  const previous = ['ViralCut AI v22', 'ViralCut AI v21', 'ViralCut AI v20', 'ViralCut AI v19', 'ViralCut AI Beta']
     .map(name => join(app.getPath('appData'), name, 'project-recovery-beta.viralcut'))
   previous.push(join(previousProfile, 'project-recovery-v18.viralcut'))
   ;[diagnostics, settings] = await Promise.all([createDiagnostics(profile), betaSettings(profile)])
+  workspace = await openWorkspace(profile)
   markClean = await startSessionMarker(profile, diagnostics.record)
   calendar = createCalendar(profile, previousProfile)
   youtube = createYouTube({ folder: profile, storage: safeStorage, openBrowser: shell.openExternal })
@@ -652,14 +677,14 @@ async function shutdown() {
     web.closeAllConnections()
   })
   await Promise.allSettled([stopped, service?.close(), previews?.close(), projects?.settled(), performanceMonitor?.close(),
-    calendar?.settled(), youtube?.close(), settings?.settled()])
+    calendar?.settled(), youtube?.close(), settings?.settled(), workspace?.settled()])
   await diagnostics?.settled()
   await markClean?.()
 }
 
 app.setAppUserModelId('com.viralcut.desktop.v21')
 if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
-  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v22'))
+  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v23'))
 }
 if (!app.requestSingleInstanceLock()) app.quit()
 else {

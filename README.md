@@ -4,13 +4,25 @@
 
 # ViralCut AI Desktop
 
-**v22.0.0 Performance & AI Studio · Windows x64 · Türkçe / English**
+**v23.0.0 Professional UI & Workflow Studio · Windows x64 · Türkçe / English**
 
 Yerel video düzenleme, otomatik altyazı ve dikey video hazırlama uygulaması.
 
 A local video editor for cutting footage, generating captions, and preparing vertical clips.
 
 [Türkçe](#türkçe) · [English](#english) · [Ekran görüntüleri / Screenshots](#ekran-görüntüleri--screenshots) · [Sürümler / Releases](https://github.com/hculgatay6-code/ViralCut-AI/releases) · [Değişiklik günlüğü / Changelog](CHANGELOG.md)
+
+## v23.0.0 · Professional UI & Workflow Studio
+
+**Projeler** menüsünden son projelerini ara, dosya aç veya 16:9, 9:16 ve 1:1 proje başlat. Üstteki **Panel düzeni** menüsünden tema ve görünür panelleri değiştir. Panel ayırıcıları fareyle veya ok tuşlarıyla ayarlanır. Tercihler bu Windows profilinde saklanır.
+
+**Open Projects** to search recent edits or choose the aspect ratio for a new project. Resize panels with the pointer or arrow keys on the divider. **Panel layout** controls visibility and theme. In the multitrack timeline, **F** fits the project, **+** and **−** zoom, and arrow keys move the playhead by one frame.
+
+| Profesyonel Editör / Professional Editor | Proje Merkezi / Project Hub |
+| --- | --- |
+| ![ViralCut AI v23 çok katmanlı editör](docs/screenshots/v23-editor.png) | ![ViralCut AI v23 son projeler](docs/screenshots/v23-project-hub.png) |
+
+Görseller, yerel Windows uygulamasından sentetik video örneğiyle alındı. [Doğrulama raporu](V23_TEST_RAPORU.md) · [Performans raporu](V23_PERFORMANCE_RAPORU.md)
 
 ## v22.0.0 · Performance & AI Studio
 

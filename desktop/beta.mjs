@@ -11,7 +11,7 @@ function validRepository(repository) {
   return typeof repository === 'string' && repoPattern.test(repository) && !['.', '..'].includes(repository.split('/')[1])
 }
 
-async function atomic(path, payload) {
+export async function atomic(path, payload) {
   await mkdir(dirname(path), { recursive: true })
   const temp = path + '.' + randomUUID() + '.tmp'
   try { await writeFile(temp, JSON.stringify(payload, null, 2) + '\n', { flag: 'wx', flush: true }); await rename(temp, path) }

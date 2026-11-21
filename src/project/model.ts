@@ -22,6 +22,10 @@ export interface Project {
   mastering?: { target: number; musicLevel: number }
 }
 export interface ProjectBridge {
+  workspace(): Promise<{ layout: WorkspaceLayout; recent: RecentProject[] }>
+  saveLayout(layout: WorkspaceLayout): Promise<{ saved?: boolean }>
+  recent(id: string): Promise<{ project?: Project; error?: string }>
+  confirmReplace(language: 'tr' | 'en'): Promise<{ confirmed?: boolean }>
   onClose(callback: () => void): () => void
   confirmClose(): Promise<void>
   addAudio(): Promise<{ media?: ProjectMedia; cancelled?: boolean; error?: string }>
@@ -36,6 +40,9 @@ export interface ProjectBridge {
   previewStatus(id: string, type: PreviewKind, height?: ProxyResolution): Promise<PreviewResult>
   cancelPreview(id: string, type: PreviewKind, height?: ProxyResolution): Promise<PreviewResult>
 }
+export type WorkspaceLayout = { left: number; right: number; timeline: number; library: boolean; inspector: boolean; tracks: boolean; theme: 'dark' | 'light' }
+export type RecentProject = { id: string; name: string }
+export const defaultLayout: WorkspaceLayout = { left: 282, right: 255, timeline: 300, library: true, inspector: true, tracks: true, theme: 'dark' }
 
 export type PreviewKind = 'proxy' | 'waveform'
 export type ProxyResolution = 360 | 540 | 720
