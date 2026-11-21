@@ -9,11 +9,12 @@ import { ExportClientError, localExporter } from '../export/client'
 import type { ExportJob } from '../export/client'
 
 import { LayeredTimeline } from './LayeredTimeline'
-import { layerDuration, layerFromLegacy } from './layer-model'
+import { layerDuration } from './layer-model'
 
 type Props = {
   project: Project; copy: Copy; media?: ProjectMedia; undo: boolean; redo: boolean; playhead: number
   autosaveInterval: number; language: Language; projectEpoch: number
+  legacyView: boolean; switchEditView: (layered: boolean) => void
   playback: boolean; stop: () => void; play: () => void; select: (clip: ProjectClip) => void
   current: string; setCurrent: (id: string) => void
   update: (apply: (project: Project) => Project) => void; load: (project: Project) => void
@@ -186,8 +187,7 @@ export function ProjectPanel(props: Props) {
   const { autosaveInterval, language } = props
   const tr = language === 'tr'
   const bridge = window.viralCutDesktop?.projects
-  const [legacy, setLegacy] = useState(false)
-  const layered = !legacy && project.timeline
+  const layered = !props.legacyView && project.timeline
   const [zoom, setZoom] = useState(85)
   const [dragged, setDragged] = useState<number>()
   const [selectedSpeech, setSelectedSpeech] = useState<Set<number>>(new Set())
@@ -247,7 +247,7 @@ export function ProjectPanel(props: Props) {
         const result = kind === 'recover' ? await bridge.recover() : await bridge.open()
         if (result.error) throw Error()
         if (result.project) {
-          props.load(result.project); setLegacy(false); setRecovery({}); setNotice(copy.projectLoaded)
+          props.load(result.project); setRecovery({}); setNotice(copy.projectLoaded)
           if (result.project.media.some(item => item.missing)) {
             setFailed(true)
             setNotice(tr ? 'Proje açıldı. Eksik videoları medya listesinden yeniden bağla.' : 'Project opened. Relink missing videos from the media list.')
@@ -315,17 +315,8 @@ export function ProjectPanel(props: Props) {
     <button className="primary" disabled={dialog || project.media.length >= 100} onClick={() => void projectDialog('add')}>{copy.addProjectMedia}</button>
     <button className="export-cancel" disabled={dialog} onClick={() => void projectDialog('open')}>{copy.openProject}</button>
     <button className="export-cancel" disabled={dialog || (!project.media.length && !project.timeline)} onClick={() => void projectDialog('save')}>{copy.saveProject}</button>
-    <button className="export-cancel" aria-pressed={!!layered} onClick={() => {
-      stop()
-      if (layered) setLegacy(true)
-      else {
-        setLegacy(false)
-        if (!project.timeline) {
-          update(value => ({ ...value, version: 2, timeline: layerFromLegacy(value) }))
-          setNotice(tr ? 'Katmanlar oluşturuldu. Önceki kurgu eski düzen görünümünde korunur.' : 'Layers created. The original edit is available in the legacy view.')
-        }
-      }
-    }}>{layered ? (tr ? 'Eski düzen' : 'Legacy sequence') : (tr ? 'Katmanlı düzen' : 'Multitrack editor')}</button>
+    <button className="export-cancel" aria-pressed={!!layered} onClick={() => props.switchEditView(!layered)}>
+      {layered ? (tr ? 'Eski düzen' : 'Legacy sequence') : (tr ? 'Katmanlı düzen' : 'Multitrack editor')}</button>
     {recovery.available && <button className="export-cancel" disabled={dialog} onClick={() => void projectDialog('recover')}>{copy.recoverProject}</button>}
     {recovery.available && <button className="export-cancel" disabled={dialog} onClick={() => setRecovery({})}>{tr ? 'Bu oturumda atla' : 'Skip for this session'}</button>}
     {recovery.damaged && <span role="alert">{tr ? 'Otomatik kayıt okunamadı. Kayıtlı projeyi elle açabilirsin.' : 'Autosave could not be read. You can open a saved project.'}</span>}

@@ -21,11 +21,14 @@ export interface ExportJob {
   progress: number
   stage?: 'silence' | 'speech' | 'media' | 'ranking' | 'vision'
   cacheHit?: boolean
+  proxyCount?: number
   waiting?: boolean
   error?: ExportErrorCode
   encoder?: 'CPU' | 'NVENC'
   verification?: { duration: number; width: number; height: number; fps: number; captions: boolean; audio: boolean }
 }
+
+export type AudioReport = { integrated: number | null; peak: number | null; range: number | null; duration: number; streamDeltaMs: number | null }
 
 export type BatchRequest = { mediaId: string; language: 'tr' | 'en'; resolution: 720 | 1080; encoder: 'auto' | 'cpu';
   useMusic?: boolean;
@@ -74,6 +77,7 @@ declare global {
         read(): Promise<import('../editor/PerformanceCenter').PerformanceData>
         profile(value: string): Promise<void>
         clear(): Promise<{ cleared?: boolean }>
+        clearPreviews(): Promise<{ cleared?: boolean }>
       }
       microphone(allow: boolean): Promise<{ allowed?: boolean }>
       creator: {
@@ -189,7 +193,7 @@ export const localExporter = {
   },
   upload,
   monitorUrl(id: string) { return base + '/' + id + '/monitor' },
-  createLayers(project: Project, preview?: { from: number; to: number }) {
+  createLayers(project: Project, preview?: { from: number; to: number; proxy?: import('../project/model').ProxyResolution }) {
     return request<ExportJob>('', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kind: 'sequence', timeline: project.timeline, frame: project.frame,
@@ -217,6 +221,11 @@ export const localExporter = {
   silences(id: string, signal: AbortSignal) {
     return request<{ silences: ClipRange[]; truncated: boolean }>('/' + id + '/silence', { signal })
   },
+  analyzeAudio(mediaId: string, range: ClipRange) {
+    return request<ExportJob>('', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'audio-analysis', mediaId, ...range }) })
+  },
+  audioReport(id: string, signal: AbortSignal) { return request<AudioReport>('/' + id + '/audio', { signal }) },
   whisper(signal: AbortSignal) {
     return request<{ available: boolean; modelPresent: boolean; enginePresent: boolean; mediaAvailable: boolean }>('/whisper', { signal })
   },

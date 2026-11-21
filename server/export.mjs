@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdtemp, readdir, rename, rmdir, stat, statfs, unlink } from 'node:fs/promises'
@@ -18,8 +18,12 @@ import { createSemanticService } from './semantic-service.mjs'
 import { validateEffects } from './effects.mjs'
 import { createVisualService } from './visual-service.mjs'
 import { analysisKey } from './analysis-cache.mjs'
+import { mediaIdentity } from './proxy-cache.mjs'
+import { analyzeAudio } from './studio-audio.mjs'
 
 const idleLimit = 30 * 60 * 1000
+const previewCacheBytes = 256 * 1024 * 1024
+const previewCacheEntries = 6
 const prefix = 'viralcut-export-v3-'
 const tempFiles = ['input.mp4', 'input.webm', 'output.mp4', 'audio.wav', 'transcript.json', 'caption.ass', 'parts.txt',
   'layers.filters', 'v0-fx.cmd', 'v1-fx.cmd', 'v2-fx.cmd', 'v3-fx.cmd', 'v4-fx.cmd', 'v0-alpha.cmd', 'v1-alpha.cmd', 'v2-alpha.cmd', 'v3-alpha.cmd', 'v4-alpha.cmd', 'edge-a.mkv', 'edge-b.mkv', 'edge-caption-a.ass', 'edge-caption-b.ass', 'studio-picture.mkv', 'studio-sequence.mkv']
@@ -88,6 +92,12 @@ async function readSettings(request, resolveMedia) {
   }
   const linked = mediaId === undefined ? undefined : resolveMedia?.(mediaId)
   if (mediaId !== undefined && !linked) throw new ExportError('missingProjectMedia', 422)
+  if (kind === 'audio-analysis' && linked) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end > 864000 || end - start < .1) {
+      throw new ExportError('badRange', 400)
+    }
+    return { kind, ...linked, linked, start, end }
+  }
   const { format, size } = linked ?? settings ?? {}
   if (!['mp4', 'webm'].includes(format) || !Number.isSafeInteger(size) || size <= 0) {
     throw new ExportError('badRequest', 400)
@@ -120,7 +130,8 @@ function errorCode(error, fallback) {
   return fallback
 }
 
-export function createExportService({ desktop = false, resolveMedia, record = () => {}, onHeavyWork = () => {}, cache, budget, decode, onProviders, toolsReady } = {}) {
+export function createExportService({ desktop = false, resolveMedia, resolveProxy, record = () => {}, onHeavyWork = () => {},
+  cache, budget, decode, onProviders, toolsReady } = {}) {
   const semantic = createSemanticService()
   const vision = createVisualService()
   let current
@@ -135,12 +146,61 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
   const abandoned = cleanAbandonedJobs().catch(() => {})
   let closed = false
   let cacheGeneration = 0, batchController, batchWork
+  const rendered = new Map()
+  let renderedBytes = 0, renderHits = 0
   const trim = async () => { vision.clear(); await semantic.close() }
   const schedule = (label, signal, run, wait) => budget ? budget.work(label, signal, run, { wait, decode: decode?.(), trim }) : run()
 
   function snapshot(job) {
     return { id: job.id, phase: job.phase, stage: job.stage, progress: job.progress, error: job.error, encoder: job.encoder,
-      verification: job.verification, cacheHit: job.cacheHit, waiting: job.waiting }
+      verification: job.verification, cacheHit: job.cacheHit, waiting: job.waiting, proxyCount: job.proxyCount }
+  }
+
+  async function removeRendered(key) {
+    const entry = rendered.get(key)
+    if (!entry) return
+    rendered.delete(key)
+    renderedBytes -= entry.size
+    await removeWorkDir(entry.directory).catch(error => record('cleanup', 'failed', undefined, error.code))
+  }
+
+  async function archive(job) {
+    const key = job.renderKey
+    if (closed || job.phase !== 'ready' || !key || job.outputSize > previewCacheBytes) return false
+    await removeRendered(key)
+    while (rendered.size >= previewCacheEntries || renderedBytes + job.outputSize > previewCacheBytes) {
+      await removeRendered(rendered.keys().next().value)
+    }
+    rendered.set(key, { directory: job.directory, output: job.output, size: job.outputSize,
+      verification: job.verification, encoder: job.encoder })
+    renderedBytes += job.outputSize
+    return true
+  }
+
+  async function preparePreview(job, allowProxy = true) {
+    const originals = new Map()
+    const proxies = new Map()
+    for (const { clips } of job.spans) for (const clip of clips) {
+      if (!originals.has(clip.path)) originals.set(clip.path, await mediaIdentity(clip))
+      if (!allowProxy || clip.kind !== 'video' || !job.previewProxy || !resolveProxy || proxies.has(clip.mediaId)) continue
+      const proxy = await resolveProxy(clip.mediaId, job.previewProxy, true)
+      proxies.set(clip.mediaId, proxy)
+    }
+    const spans = job.spans.map(span => ({ ...span, clips: span.clips.map(clip => {
+      const proxy = clip.kind === 'video' && proxies.get(clip.mediaId)
+      return proxy ? { ...clip, ...proxy } : clip
+    }) }))
+    job.proxyCount = [...proxies.values()].filter(Boolean).length
+    const key = createHash('sha256').update(JSON.stringify([
+      spans, [...originals.values()], job.profile, job.frame, job.encoder, job.overlay, job.titles, [...job.animatedCaptions],
+    ])).digest('hex')
+    return { key, spans, async unchanged() {
+      for (const [path, identity] of originals) {
+        const actual = await mediaIdentity({ path, format: identity[1], size: Number(identity[2]) }).catch(() => [])
+        if (actual.some((value, index) => value !== identity[index]) || !actual.length) return false
+      }
+      return true
+    } }
   }
 
   async function discard(job) {
@@ -148,7 +208,7 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
     job.controller.abort()
     job.cleanup = (async () => {
       await Promise.allSettled([job.work, job.download, ...job.monitors])
-      await removeWorkDir(job.directory).catch(error => {
+      if (!await archive(job)) await removeWorkDir(job.directory).catch(error => {
         if (error.code !== 'ENOENT') record('cleanup', 'failed', job.started, error.code)
       })
       if (current === job) current = undefined
@@ -165,11 +225,11 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
     job.phase = 'processing'
     job.progress = 0
     job.started = performance.now()
-    const processJob = job.kind === 'shorts-analysis' ? analyzeShorts : job.kind === 'transcribe' ? transcribe : job.kind === 'silence' ? analyzeSilence
+    const processJob = job.kind === 'audio-analysis' ? analyzeAudio : job.kind === 'shorts-analysis' ? analyzeShorts : job.kind === 'transcribe' ? transcribe : job.kind === 'silence' ? analyzeSilence
       : job.spans ? encodeLayeredSequence : job.kind === 'sequence' ? encodeSequence : encodeClip
     const signal = job.controller.signal
     let heavy = false
-    job.work = schedule(job.kind, signal, async () => {
+    job.work = schedule(job.monitor && job.spans ? 'preview' : job.kind, signal, async () => {
       job.waiting = false
       job.controller.signal.throwIfAborted()
       if (job.linked) {
@@ -183,16 +243,45 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
       if (cached && generation === cacheGeneration) { job.cacheHit = true; return cached }
       heavy = true
       await onHeavyWork(true)
-      const result = await processJob({
+      signal.throwIfAborted()
+      let preview = job.monitor && job.spans && desktop ? await preparePreview(job) : undefined
+      const hit = preview && rendered.get(preview.key)
+      if (hit) {
+        const file = await stat(hit.output).catch(() => null)
+        if (file?.isFile() && file.size === hit.size && await preview.unchanged()) {
+          await rename(hit.output, job.output)
+          await removeRendered(preview.key)
+          job.cacheHit = true
+          job.renderKey = preview.key
+          renderHits++
+          return hit
+        }
+        await removeRendered(preview.key)
+      }
+      const perform = () => processJob({
         input: job.input, output: job.output, format: job.format, start: job.start, end: job.end, voice: job.voice,
         directory: job.directory, language: job.language, device: job.device, overlay: job.overlay,
         analysis: job.analysis, edit: job.edit, effects: job.effects,
         semantic, vision, goal: job.goal, duration: job.duration, visualMode: job.visualMode, visualDevice: job.visualDevice, director: job.director,
-        parts: job.parts, spans: job.spans, animatedCaptions: job.animatedCaptions, titles: job.titles, frame: job.frame, profile: job.profile, encoder: job.encoder, mastering: job.mastering,
+        parts: job.parts, spans: preview?.spans ?? job.spans, animatedCaptions: job.animatedCaptions, titles: job.titles,
+        frame: job.frame, profile: job.profile, encoder: job.encoder, mastering: job.mastering,
         signal: job.controller.signal,
         onStage: stage => { job.stage = stage },
         onProgress: progress => { job.progress = Math.max(job.progress, progress) },
       })
+      let result
+      try { result = await perform() }
+      catch (error) {
+        signal.throwIfAborted()
+        if (!job.proxyCount || !['badSource', 'missingProjectMedia', 'badRange', 'encodeFailed', 'verifyFailed'].includes(error.message)) throw error
+        await unlink(job.output).catch(unlinkError => { if (unlinkError.code !== 'ENOENT') throw unlinkError })
+        preview = await preparePreview(job, false)
+        result = await perform()
+      }
+      if (preview) {
+        if (!await preview.unchanged()) throw new ExportError('missingProjectMedia')
+        job.renderKey = preview.key
+      }
       if (job.kind === 'shorts-analysis' && result.visual) onProviders?.(result.visual.models)
       if (key && !signal.aborted && !result.speechUnavailable && ['e5', 'visual'].includes(result.selection?.mode) &&
           result.visual?.models.every(model => ['cpu', 'dml'].includes(model)) &&
@@ -203,6 +292,7 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
     }, () => { job.waiting = true }).then(result => {
       if (job.kind === 'transcribe' || job.kind === 'shorts-analysis') job.transcript = result
       else if (job.kind === 'silence') job.silence = result
+      else if (job.kind === 'audio-analysis') job.audio = result
       else {
         job.outputSize = result.size
         job.encoder = result.encoder
@@ -230,7 +320,7 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
 
   async function handle(request, response, address) {
     if (closed) throw new ExportError('serviceError', 503)
-    const route = /^\/api\/export(?:\/(health|whisper|([a-f0-9-]{36})(?:\/(input|file|download|transcript|silence|monitor))?))?$/.exec(request.url ?? '')
+    const route = /^\/api\/export(?:\/(health|whisper|([a-f0-9-]{36})(?:\/(input|file|download|transcript|silence|audio|monitor))?))?$/.exec(request.url ?? '')
     if (!route) throw new ExportError('badRequest', 404)
     const authority = request.headers.host?.toLowerCase()
     const hosts = desktop ? ['127.0.0.1:'] : ['127.0.0.1:', 'localhost:', '[::1]:']
@@ -298,6 +388,8 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
       return json(response, 200, job.transcript)
     }
     if (method === 'GET' && resource === 'silence' && job.phase === 'ready' && job.kind === 'silence') return json(response, 200, job.silence)
+    if (method === 'GET' && resource === 'audio' && job.phase === 'ready' && job.kind === 'audio-analysis') return json(response, 200, job.audio)
+    if (method === 'GET' && job.monitor && ['file', 'download'].includes(resource)) throw new ExportError('jobMissing', 404)
     if (method === 'GET' && resource === 'monitor' && desktop && job.monitor && job.phase === 'ready') {
       const header = request.headers.range
       const match = header && /^bytes=(\d+)-(\d*)$/.exec(header)
@@ -347,7 +439,8 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
         return
       }
     }
-    if (method === 'GET' && (resource === 'file' || resource === 'download') && job.phase === 'ready' && ['export', 'sequence'].includes(job.kind)) {
+    if (method === 'GET' && (resource === 'file' || resource === 'download') && !job.monitor &&
+        job.phase === 'ready' && ['export', 'sequence'].includes(job.kind)) {
       if (job.download) throw new ExportError('busy', 409)
       response.writeHead(200, {
         'Content-Type': 'video/mp4', 'Content-Length': job.outputSize, 'Content-Disposition': 'attachment',
@@ -371,6 +464,12 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
     async clearCache() {
       if (creating || batchActive() || current?.phase === 'processing') return false
       cacheGeneration++; await trim(); await cache?.clear()
+      return true
+    },
+    previewCacheInfo() { return { entries: rendered.size, bytes: renderedBytes, hits: renderHits } },
+    async clearPreviews() {
+      if (creating || current?.cleanup || current?.phase === 'processing') return false
+      for (const key of rendered.keys()) await removeRendered(key)
       return true
     },
     activity() { return { job: current && ['waiting', 'receiving', 'processing'].includes(current.phase) ? snapshot(current) : undefined,
@@ -410,7 +509,8 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
     batchStatus() { return batch?.snapshot() ?? { active: false, items: [] } },
     cancelBatch() { batch?.cancel(); return this.batchStatus() },
     hasExport(id) {
-      return current?.id === id && ['export', 'sequence'].includes(current.kind) && current.phase === 'ready' && !current.cleanup && !current.download
+      return current?.id === id && !current.monitor && ['export', 'sequence'].includes(current.kind) &&
+        current.phase === 'ready' && !current.cleanup && !current.download
     },
     async saveExport(id, path) {
       if (!this.hasExport(id)) throw new ExportError('jobMissing', 404)
@@ -448,6 +548,7 @@ export function createExportService({ desktop = false, resolveMedia, record = ()
       batch?.cancel()
       await batch?.work
       if (current) await discard(current)
+      for (const key of rendered.keys()) await removeRendered(key)
       await semantic.close()
     },
   }

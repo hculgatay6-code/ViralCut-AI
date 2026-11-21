@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('viralCutDesktop', {
     read: () => ipcRenderer.invoke('viralcut:performance-read'),
     profile: value => ipcRenderer.invoke('viralcut:performance-profile', value),
     clear: () => ipcRenderer.invoke('viralcut:performance-clear'),
+    clearPreviews: () => ipcRenderer.invoke('viralcut:performance-clear-previews'),
   },
   studio: {
     templates: () => ipcRenderer.invoke('viralcut:studio-templates'),
@@ -77,8 +78,8 @@ contextBridge.exposeInMainWorld('viralCutDesktop', {
     autosave: state => ipcRenderer.invoke('viralcut:project-autosave', state),
     hasRecovery: () => ipcRenderer.invoke('viralcut:project-has-recovery'),
     recover: () => ipcRenderer.invoke('viralcut:project-recover'),
-    prepare: (id, type) => ipcRenderer.invoke('viralcut:preview-start', { id, type }),
-    previewStatus: (id, type) => ipcRenderer.invoke('viralcut:preview-status', { id, type }),
-    cancelPreview: (id, type) => ipcRenderer.invoke('viralcut:preview-cancel', { id, type }),
+    prepare: (id, type, height, device) => ipcRenderer.invoke('viralcut:preview-start', { id, type, height, device }),
+    previewStatus: (id, type, height) => ipcRenderer.invoke('viralcut:preview-status', { id, type, height }),
+    cancelPreview: (id, type, height) => ipcRenderer.invoke('viralcut:preview-cancel', { id, type, height }),
   },
 })

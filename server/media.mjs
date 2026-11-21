@@ -14,6 +14,9 @@ export class ExportError extends Error {
   }
 }
 
+const mediaProcesses = { ffmpeg: 0, ffprobe: 0 }
+export const mediaActivity = () => ({ ...mediaProcesses })
+
 export function run(program, args, signal, onLine, { stderrLines = false, cwd } = {}) {
   signal.throwIfAborted()
   return new Promise((resolve, reject) => {
@@ -22,6 +25,8 @@ export function run(program, args, signal, onLine, { stderrLines = false, cwd } 
     const child = spawn(executable, args, {
       shell: false, windowsHide: true, signal, cwd, stdio: ['ignore', 'pipe', 'pipe'],
     })
+    const track = program === 'ffmpeg' || program === 'ffprobe'
+    if (track) mediaProcesses[program]++
     let failure
     let stdout = ''
     let stderr = ''
@@ -44,6 +49,7 @@ export function run(program, args, signal, onLine, { stderrLines = false, cwd } 
       emitLines(data)
     })
     child.on('close', code => {
+      if (track) mediaProcesses[program]--
       if (failure) reject(failure)
       else if (code === 0) resolve(stdout)
       else reject(new ExportError(/no space left|disk full|not enough space/i.test(stderr) ? 'diskFull' : 'encodeFailed'))
@@ -61,7 +67,7 @@ export function inputOptions(format) {
 export async function probe(file, format, signal) {
   return JSON.parse(await run('ffprobe', [
     '-v', 'error', ...inputOptions(format), '-show_entries',
-    'format=duration:stream=codec_type,width,height,codec_name,avg_frame_rate,nb_frames,duration,sample_aspect_ratio:stream_disposition=attached_pic:stream_side_data=rotation',
+    'format=duration:stream=codec_type,width,height,codec_name,avg_frame_rate,nb_frames,duration,start_time,sample_aspect_ratio,color_transfer:stream_disposition=attached_pic:stream_side_data=rotation',
     '-of', 'json', '-i', file,
   ], AbortSignal.any([signal, AbortSignal.timeout(45000)])))
 }

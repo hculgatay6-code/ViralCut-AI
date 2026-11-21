@@ -16,17 +16,20 @@ import { defaultFrame } from './shorts'
 import type { Frame } from './shorts'
 import { suggestZoom } from './effects'
 import type { StudioEffects } from './effects'
+import { speechCutInside } from './approved-shorts'
+import type { ApprovedShorts } from './approved-shorts'
 
 type Props = {
   copy: Copy; language: Language; media?: ProjectMedia; duration: number; appearance: Appearance; frame?: Frame
   open: (media: ProjectMedia) => void
   preview: (range: ClipRange, cues: Cue[], appearance: Appearance, frame: Frame, remove: ClipRange[], effects?: StudioEffects) => void
   stopPreview: () => void
+  apply: (media: ProjectMedia, plan: ApprovedShorts) => boolean
 }
 
 const wait = () => new Promise<void>(resolve => setTimeout(resolve, 350))
 
-export function AutoShortsPanel({ copy, language, media, duration, appearance, frame, open, preview, stopPreview }: Props) {
+export function AutoShortsPanel({ copy, language, media, duration, appearance, frame, open, preview, stopPreview, apply }: Props) {
   const bridge = window.viralCutDesktop?.shorts
   const [speechLanguage, setSpeechLanguage] = useState<'auto' | 'tr' | 'en'>('auto')
   const [goal, setGoal] = useState(30)
@@ -149,11 +152,11 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
   const framing = (item: Candidate): Frame => track && item.track?.length
     ? { ...outputFrame, track: item.track } : outputFrame
 
-  async function exportClips(single?: number) {
+  async function exportClips(single?: number, toTimeline = false) {
     const items = candidates.map((item, index) => ({ item, index })).filter(({ item, index }) => single === undefined ? item.selected : index === single)
     if (!bridge || !media || busy || !items.length) return
     if (items.some(({ item }) => !valid(item))) { setError(copy.autoInvalid); return }
-    setDialog(true); setError(''); setNotice('')
+    setError(''); setNotice('')
     const request: BatchRequest = { mediaId: media.id, language, resolution, encoder,
       items: items.map(({ item }) => {
         const rows = cues(item)
@@ -162,6 +165,11 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
             ...(enhance ? { voice: true, noise: 7, normalize: true } : {}) } : undefined,
           overlay: showCaptions && rows.length ? { appearance: captions, cues: rows } : undefined }
       }) }
+    if (toTimeline) {
+      if (!apply(media, request)) setError(copy.autoInvalid)
+      return
+    }
+    setDialog(true)
     try {
       const result = await bridge.start(request)
       if (result.cancelled) return
@@ -238,6 +246,8 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
               <dl>{Object.entries(item.evaluation.metrics).map(([key, value]) => <div key={key}>
                 <dt>{copy.semanticMetrics[key as keyof Copy['semanticMetrics']]}</dt><dd>{value === null ? '—' : value + '%'}</dd></div>)}</dl>
               <p>{item.evaluation.reasons.map(key => copy.semanticReasons[key]).join(' · ')}</p></details>}
+            {speechCutInside(item, analysis.cues) && <p role="status">{language === 'tr'
+              ? 'Bir kesim konuşma aralığının içinde.' : 'A cut falls inside detected speech.'}</p>}
             {!!item.visual?.objects.length && <p>{copy.visual.detected} · {item.visual.objects.join(', ')}</p>}
             {!!rows.length && <details className="semantic-details"><summary>{copy.semanticTranscript}</summary>
               <p>{rows.map(row => row.text.trim()).join(' ')}</p></details>}
@@ -320,6 +330,8 @@ export function AutoShortsPanel({ copy, language, media, duration, appearance, f
         {highlight && showCaptions && <p>{copy.autoWordFallback}</p>}
       </details>
       {!!candidates.length && <button className="primary" disabled={busy || !candidates.some(item => item.selected)} onClick={() => void exportClips()}>{copy.autoExport}</button>}
+      {!!candidates.length && <button className="export-cancel" disabled={busy || !candidates.some(item => item.selected)}
+        onClick={() => void exportClips(undefined, true)}>{language === 'tr' ? 'Seçilenleri Kolay Editöre ekle' : 'Add selected to Easy Editor'}</button>}
       {batch?.active && <button className="export-cancel" onClick={() => { void bridge.cancel().catch(() => setError(copy.exportErrors.serviceError)) }}>{copy.exportCancel}</button>}
       {batch && <div className="auto-batch" aria-label={copy.autoExport}>
         {folder && <p title={folder}>{folder}</p>}

@@ -1,5 +1,5 @@
-appId: com.viralcut.desktop.v21
-productName: ViralCut AI v21
+appId: com.viralcut.desktop.v22
+productName: ViralCut AI v22
 directories:
   output: release
 asar: true
@@ -22,6 +22,7 @@ files:
   - server/effect-render.mjs
   - server/timeline-document.mjs
   - server/preview.mjs
+  - server/proxy-cache.mjs
   - server/shorts-batch.mjs
   - server/shorts-quality.mjs
   - server/effects.mjs
@@ -43,6 +44,8 @@ extraResources:
     to: .
   - from: desktop/icon.ico
     to: icon.ico
+  - from: THIRD_PARTY_NOTICES.md
+    to: licenses/V22-THIRD_PARTY_NOTICES.md
 win:
   icon: desktop/icon.ico
   requestedExecutionLevel: asInvoker

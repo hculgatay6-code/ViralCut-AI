@@ -43,6 +43,10 @@ export function createPerformanceMonitor(app) {
   return {
     providers(values) { hardware.providers = [...new Set(values.filter(value => ['cpu', 'dml', 'cuda'].includes(value)))] },
     decode: () => hardware.decode.includes('cuda') ? 'cuda' : hardware.decode[0],
+    proxyAcceleration() {
+      const limited = captured?.vram != null && captured?.vramTotal != null && captured.vramTotal - captured.vram < 1024
+      return { nvenc: hardware.nvenc && !limited, decode: hardware.decode.includes('cuda') ? 'cuda' : hardware.decode[0] }
+    },
     async sample() {
       const time = Date.now()
       if (!previous || time - previous >= 2400) {

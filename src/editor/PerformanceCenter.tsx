@@ -2,13 +2,19 @@ import { useEffect, useState } from 'react'
 import type { Language } from '../i18n'
 import type { BatchResult, ExportJob } from '../export/client'
 import type { DiagnosticEntry } from './Diagnostics'
+import type { PreviewResult } from '../project/model'
+
+type CacheMetrics = { entries: number; bytes: number; hits: number }
 
 export interface PerformanceData {
   system: { cpu: number; ram: number; main: number; renderer: number; usedMiB: number; disk: number | null;
     gpu: { gpu: number | null; encode: number | null; decode: number | null; vram: number | null; vramTotal: number | null } | null;
     hardware: { status: string; nvenc: boolean; decode: string[]; scaleCuda: boolean; providers: string[] } }
   budget: { profile: string; active?: string; waiting: number; pressure: boolean; availableMiB: number; totalMiB: number }
-  analysisCache: { entries: number; bytes: number; hits: number }
+  analysisCache: CacheMetrics
+  proxyCache?: CacheMetrics & { active?: PreviewResult; waiting: number }
+  previewCache?: CacheMetrics
+  processes?: { ffmpeg: number; ffprobe: number }
   activity: { operation?: string; job?: ExportJob; batch: BatchResult }
   recent: DiagnosticEntry[]
 }
@@ -16,6 +22,7 @@ export interface PerformanceData {
 export function PerformanceCenter({ language }: { language: Language }) {
   const [data, setData] = useState<PerformanceData>()
   const [error, setError] = useState(false)
+  const [cacheBusy, setCacheBusy] = useState(false)
   const bridge = window.viralCutDesktop?.performance
   const l = (tr: string, en: string) => language === 'tr' ? tr : en
   useEffect(() => {
@@ -34,12 +41,14 @@ export function PerformanceCenter({ language }: { language: Language }) {
   }, [bridge])
   const missing = l('Ölçülemiyor', 'Unavailable')
   const unit = (value: number | null | undefined, suffix: string) => value == null ? missing : String(value) + suffix
-  const { system, budget, analysisCache, activity, recent } = data ?? {}
+  const { system, budget, analysisCache, proxyCache, previewCache, processes, activity, recent } = data ?? {}
   const hardware = system?.hardware
   const task = (name?: string) => ({
     export: l('MP4 dışa aktarma', 'MP4 export'), sequence: l('Proje dışa aktarma', 'Project export'),
     batch: l('Toplu Shorts', 'Shorts batch'), 'shorts-analysis': l('AI video analizi', 'AI video analysis'),
     transcribe: l('Konuşma tanıma', 'Speech recognition'), silence: l('Sessizlik analizi', 'Silence analysis'),
+    proxy: l('Proxy üretimi', 'Proxy encoding'), waveform: l('Dalga formu', 'Waveform'),
+    preview: l('Katmanlı önizleme', 'Composite preview'), 'audio-analysis': l('Ses ölçümü', 'Audio measurement'),
   })[name ?? ''] ?? l('Beklemede', 'Idle')
   const latestExport = recent?.find(row => row.outcome === 'ready' && ['batch', 'export', 'sequence'].includes(row.operation))
   const clip = activity?.batch.items.filter(item => item.phase === 'ready').at(-1)
@@ -60,9 +69,11 @@ export function PerformanceCenter({ language }: { language: Language }) {
         <div><dt>NVENC / NVDEC</dt><dd>{unit(system.gpu?.encode, '%')} / {unit(system.gpu?.decode, '%')}</dd></div>
         <div><dt>VRAM</dt><dd>{unit(system.gpu?.vram, ' MiB')} / {unit(system.gpu?.vramTotal, ' MiB')}</dd></div>
         <div><dt>{l('Geçici disk boş alanı', 'Temp storage free')}</dt><dd>{unit(system.disk, ' MiB')}</dd></div>
+        {processes && <div><dt>FFmpeg / FFprobe</dt><dd>{processes.ffmpeg} / {processes.ffprobe}</dd></div>}
       </dl>
       <p>{l('Aktif görev', 'Active task')} · {task(budget.active)} {activity?.job && ' · ' + Math.round(activity.job.progress) + '%'}</p>
       <p>{l('Kuyruktaki görevler', 'Queued tasks')} · {budget.waiting + (activity?.batch.items.filter(item => item.phase === 'queued').length ?? 0)}</p>
+      {proxyCache?.active?.resolution && <p>{l('Medya hazırlama', 'Media preparation')} · {proxyCache.active.resolution}p · {Math.round(proxyCache.active.progress ?? 0)}% · {proxyCache.waiting} {l('sırada', 'queued')}</p>}
       {budget.pressure && <p role="status">{l('Kullanılabilir bellek düşük. Yeni ağır görev bekletiliyor.', 'Available memory is low. New heavy work will wait.')}</p>}
       {hardware && <p>{hardware.status === 'checking' ? l('Donanım sınanıyor…', 'Testing hardware…') :
         hardware.status === 'unavailable' ? missing : 'H.264 NVENC: ' + (hardware.nvenc ? '✓' : '—') + ' · ' +
@@ -74,6 +85,14 @@ export function PerformanceCenter({ language }: { language: Language }) {
         <p>{l('Yerel analiz önbelleği', 'Local analysis cache')} · {analysisCache.entries} · {(analysisCache.bytes / 1048576).toFixed(2)} MiB · {analysisCache.hits} {l('isabet', 'hits')}</p>
         <button className="export-cancel" disabled={!!budget.active || budget.waiting > 0 || !!activity?.job || !!activity?.batch.active}
           onClick={() => void bridge?.clear().catch(() => setError(true))}>{l('Analiz önbelleğini temizle', 'Clear analysis cache')}</button>
+      </div>}
+      {proxyCache && previewCache && <div className="shorts-actions">
+        <p>{l('Proxy önbelleği', 'Proxy cache')} · {proxyCache.entries} · {(proxyCache.bytes / 1048576).toFixed(1)} MiB</p>
+        <p>{l('Önizleme önbelleği', 'Preview cache')} · {previewCache.entries} · {(previewCache.bytes / 1048576).toFixed(1)} MiB · {previewCache.hits} {l('isabet', 'hits')}</p>
+        <button className="export-cancel" disabled={!!budget.active || !!activity?.job || !!proxyCache.active || !!proxyCache.waiting}
+          onClick={() => void bridge?.clearPreviews().then(result => setCacheBusy(!result.cleared)).catch(() => setError(true))}>
+          {l('Proxy ve önizleme önbelleğini temizle', 'Clear proxy and preview caches')}</button>
+        {cacheBusy && <p role="status">{l('Önbellek kullanımda. İşlem bitince tekrar dene.', 'The cache is in use. Try again when work finishes.')}</p>}
       </div>}
     </div>}
   </section>

@@ -6,13 +6,14 @@ import { createServer } from 'node:http'
 import { basename, dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createExportService } from '../server/export.mjs'
-import { checkTools } from '../server/media.mjs'
+import { checkTools, mediaActivity } from '../server/media.mjs'
 import { modelVerified, whisperAvailability } from '../server/whisper.mjs'
 import { libraryDocument } from '../server/effect-document.mjs'
 import { createProjectStore, localPath } from './projects.mjs'
 import { batchSize } from '../server/shorts-batch.mjs'
 import { ExportError } from '../server/media.mjs'
 import { createPreviewQueue } from '../server/preview.mjs'
+import { proxyProfiles } from '../server/proxy-cache.mjs'
 import { validateOverlay } from '../server/ass.mjs'
 import { createDiagnostics } from './diagnostics.mjs'
 import { prepareDirector } from './director.mjs'
@@ -69,7 +70,7 @@ function configureTools() {
 }
 
 async function configureModel() {
-  for (const profile of [app.getPath('userData'), previousProfile]) {
+  for (const profile of [app.getPath('userData'), join(app.getPath('appData'), 'ViralCut AI v21'), previousProfile]) {
     try {
       const settings = JSON.parse(await readFile(join(profile, 'model.json'), 'utf8'))
       if (typeof settings.path === 'string' && await modelVerified(settings.path)) {
@@ -218,15 +219,20 @@ function registerDialogs() {
     return { allowed: allow === true }
   })
   safeHandle('performance-read', async () => {
-    const [system, analysisCache] = await Promise.all([performanceMonitor.sample(), cache.info()])
-    return { system, analysisCache, budget: budget.info(), activity: service.activity(),
-      recent: diagnostics.entries().filter(row => ['shorts-analysis', 'transcribe', 'export', 'sequence', 'batch'].includes(row.operation)).slice(0, 6) }
+    const [system, analysisCache, proxyCache] = await Promise.all([performanceMonitor.sample(), cache.info(), previews.info()])
+    return { system, analysisCache, proxyCache, previewCache: service.previewCacheInfo(), processes: mediaActivity(),
+      budget: budget.info(), activity: service.activity(),
+      recent: diagnostics.entries().filter(row => ['shorts-analysis', 'transcribe', 'export', 'sequence', 'batch', 'proxy', 'waveform', 'audio-analysis'].includes(row.operation)).slice(0, 6) }
   })
   safeHandle('performance-profile', profile => {
     if (profileNames.includes(profile)) budget.change(profile)
     return {}
   })
   safeHandle('performance-clear', async () => ({ cleared: await service.clearCache() }))
+  safeHandle('performance-clear-previews', async () => {
+    if (!await service.clearPreviews()) return { cleared: false }
+    return { cleared: await previews.clear() }
+  })
   safeHandle('source-file', path => projects.register(path, true).then(media => ({ media })))
   safeHandle('close-confirmed', () => {
     if (closeRequested) { clearTimeout(closeTimer); app.quit() }
@@ -434,9 +440,15 @@ function registerDialogs() {
   safeHandle('project-has-recovery', () => projects.recovery())
   safeHandle('project-recover', async () => ({ project: await projects.recover() }))
   for (const [channel, operation] of [['start', 'start'], ['status', 'status'], ['cancel', 'cancel']]) {
-    safeHandle('preview-' + channel, ({ id, type } = {}) => {
-      if (typeof id !== 'string' || !idPattern.test(id) || !['waveform', 'proxy'].includes(type)) return { error: 'badMedia' }
-      return previews[operation](id, type)
+    safeHandle('preview-' + channel, async ({ id, type, height = 360, device = 'auto' } = {}) => {
+      if (typeof id !== 'string' || !idPattern.test(id) || !['waveform', 'proxy'].includes(type) ||
+          !proxyProfiles.includes(height) || !['auto', 'cpu'].includes(device)) return { error: 'badMedia' }
+      if (type === 'proxy' && operation === 'status') return previews.cacheStatus(id, height)
+      if (type === 'proxy' && operation === 'start') {
+        const present = await previews.cacheStatus(id, height)
+        if (present.phase === 'ready') return present
+      }
+      return previews[operation](id, type, height, device)
     })
   }
 
@@ -501,7 +513,7 @@ async function startServer() {
   for (const item of assets) {
     if (item.isFile() && types[extname(item.name)]) files.set('/assets/' + item.name, join(dist, 'assets', item.name))
   }
-  service = createExportService({ desktop: true, resolveMedia: projects.resolveMedia,
+  service = createExportService({ desktop: true, resolveMedia: projects.resolveMedia, resolveProxy: previews.playable,
     record: diagnostics.record, onHeavyWork: previews.prioritize, cache, budget, decode: performanceMonitor.decode,
     onProviders: performanceMonitor.providers, toolsReady: true })
   web = createServer((req, res) => {
@@ -513,7 +525,7 @@ async function startServer() {
     res.setHeader('Content-Security-Policy', csp)
     res.setHeader('Referrer-Policy', 'no-referrer')
     res.setHeader('X-Content-Type-Options', 'nosniff')
-    const media = /^\/(project-media|preview-media)\/([a-f0-9-]{36})$/.exec(req.url)
+    const media = /^\/(project-media|preview-media)\/([a-f0-9-]{36})(?:\/(360|540|720))?$/.exec(req.url)
     const creator = /^\/creator-render\/((?:youtube|tiktok|instagram)-[a-f0-9]{8}\.mp4)$/.exec(req.url)
     if (creator) {
       if (!creatorOutput?.batch.items.some(item => item.phase === 'ready' && item.filename === creator[1])) return res.writeHead(404).end()
@@ -528,9 +540,12 @@ async function startServer() {
       return
     }
     if (media && idPattern.test(media[2])) {
-      const proxy = media[1] === 'preview-media' ? previews.proxy(media[2]) : undefined
-      if (media[1] === 'preview-media' && !proxy) return res.writeHead(404).end()
-      void projects.stream(req, res, media[2], proxy).catch(() => {
+      void (async () => {
+        if (media[1] === 'project-media' && media[3]) return res.writeHead(404).end()
+        const proxy = media[1] === 'preview-media' ? await previews.playable(media[2], Number(media[3] ?? 360)) : undefined
+        if (media[1] === 'preview-media' && !proxy) return res.writeHead(404).end()
+        await projects.stream(req, res, media[2], proxy?.path)
+      })().catch(() => {
         if (res.headersSent) res.destroy()
         else res.writeHead(500).end()
       })
@@ -552,7 +567,9 @@ async function startServer() {
 
 async function openEditor() {
   const profile = app.getPath('userData')
-  const previous = [join(app.getPath('appData'), 'ViralCut AI v20', 'project-recovery-beta.viralcut'), join(app.getPath('appData'), 'ViralCut AI v19', 'project-recovery-beta.viralcut'), join(app.getPath('appData'), 'ViralCut AI Beta', 'project-recovery-beta.viralcut'), join(previousProfile, 'project-recovery-v18.viralcut')]
+  const previous = ['ViralCut AI v21', 'ViralCut AI v20', 'ViralCut AI v19', 'ViralCut AI Beta']
+    .map(name => join(app.getPath('appData'), name, 'project-recovery-beta.viralcut'))
+  previous.push(join(previousProfile, 'project-recovery-v18.viralcut'))
   ;[diagnostics, settings] = await Promise.all([createDiagnostics(profile), betaSettings(profile)])
   markClean = await startSessionMarker(profile, diagnostics.record)
   calendar = createCalendar(profile, previousProfile)
@@ -564,10 +581,12 @@ async function openEditor() {
   ])
   if (!tools) throw new Error('Paketin FFmpeg veya FFprobe dosyaları çalışmadı. Uygulamayı yeniden kurmayı deneyin.')
   projects = createProjectStore(join(profile, 'project-recovery-beta.viralcut'), previous)
-  previews = createPreviewQueue(projects.resolveMedia, diagnostics.record)
   cache = createAnalysisCache(join(app.getPath('userData'), 'analysis-v18'))
   budget = createResourceBudget()
   performanceMonitor = createPerformanceMonitor(app)
+  previews = createPreviewQueue(projects.resolveMedia, diagnostics.record, {
+    directory: join(profile, 'proxy-cache-v1'), budget, hardware: performanceMonitor.proxyAcceleration,
+  })
   await startServer()
   const editorSession = session.fromPartition('viralcut-editor')
   editorSession.setPermissionRequestHandler((contents, permission, reply, details) => {
@@ -640,7 +659,7 @@ async function shutdown() {
 
 app.setAppUserModelId('com.viralcut.desktop.v21')
 if (app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) {
-  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v21'))
+  app.setPath('userData', join(app.getPath('appData'), 'ViralCut AI v22'))
 }
 if (!app.requestSingleInstanceLock()) app.quit()
 else {

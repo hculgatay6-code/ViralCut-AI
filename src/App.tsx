@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useMemo, useReducer, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useMemo, useReducer, useRef, useState } from 'react'
 import type { CSSProperties, DragEvent } from 'react'
 import {
   AlertCircle, CircleHelp, ClosedCaption, Film, FolderOpen, Globe2, HardDrive,
@@ -36,9 +36,13 @@ import { createCueLookup } from './subtitles/lookup'
 import { ProjectPanel } from './project/ProjectPanel'
 import { MediaPreparation } from './project/MediaPreparation'
 import { defaultProfile, historyReducer, linkedFiles } from './project/model'
-import type { Project, ProjectClip, ProjectMedia, Waveform } from './project/model'
+import type { Project, ProjectClip, ProjectMedia, ProxyResolution, Waveform } from './project/model'
+import { layerFromLegacy } from './project/layer-model'
+import { appendApprovedShorts } from './editor/approved-shorts'
+import type { ApprovedShorts } from './editor/approved-shorts'
 
 const emptyCues: Cue[] = []
+const AudioInspector = lazy(() => import('./editor/AudioInspector').then(module => ({ default: module.AudioInspector })))
 
 async function mediaDuration(id: string) {
   const video = document.createElement('video')
@@ -67,7 +71,9 @@ export function App() {
   const desktop = !!window.viralCutDesktop
   const [studioTab, setStudioTab] = useState<'media' | 'subtitles' | 'audio' | 'ai' | 'effects' | 'cover' | 'director' | 'performance' | 'copilot' | 'creator' | 'settings'>('media')
   const [beta, setBeta] = useState<BetaPreferences>()
-  const [version, setVersion] = useState('21.0.0')
+  const [version, setVersion] = useState('22.0.0')
+  const [workspace, setWorkspace] = useState<'easy' | 'professional' | 'ai'>('easy')
+  const [legacyView, setLegacyView] = useState(false)
   const [creatorIntent, setCreatorIntent] = useState<CreatorIntent>()
   const [copilotProject, setCopilotProject] = useState(0)
   const [safeGuides, setSafeGuides] = useState(false)
@@ -81,7 +87,8 @@ export function App() {
   const [settingsHost, setSettingsHost] = useState<HTMLDivElement | null>(null)
   const [speechHost, setSpeechHost] = useState<HTMLDivElement | null>(null)
   const [waveforms, setWaveforms] = useState<Record<string, Waveform>>({})
-  const [proxyId, setProxyId] = useState<string>()
+  const [proxyId, setProxyId] = useState<{ id: string; height: ProxyResolution }>()
+  const [proxyFallback, setProxyFallback] = useState<string>()
   const [sourceEffects, setSourceEffects] = useState<{ url: string; current?: StudioEffects; history: (StudioEffects | undefined)[] }>()
   const [compare, setCompare] = useState(false)
   const [autoMedia, setAutoMedia] = useState<{ media: ProjectMedia; duration: number }>()
@@ -107,8 +114,8 @@ export function App() {
   const projectMedia = mountedSource ? project.media.find(item => item.id === mountedSource.id) : undefined
   const selectedProjectClip = project.clips.find(clip => clip.id === currentClip && clip.mediaId === projectMedia?.id)
   const effects = selectedProjectClip ? selectedProjectClip.effects : sourceEffects?.url === source?.url ? sourceEffects?.current : undefined
-  const usingProxy = !!projectMedia && proxyId === projectMedia.id
-  const videoUrl = usingProxy ? '/preview-media/' + proxyId : source?.url
+  const usingProxy = projectMedia && proxyId?.id === projectMedia.id ? proxyId : undefined
+  const videoUrl = usingProxy ? '/preview-media/' + usingProxy.id + '/' + usingProxy.height : source?.url
   const [captionTrack, setCaptionTrack] = useState<{ file: File | undefined; cues: Cue[] }>()
   const [shorts, setShorts] = useState<{ file?: File; edit?: Edit; markers?: ClipRange[]; preview?: boolean }>({})
   const candidateEnd = useRef<number>(null)
@@ -207,11 +214,37 @@ export function App() {
   })
   useEffect(() => { startAuto() }, [metadata, activeAuto])
 
-  function toggleProxy() {
+  function selectProxy(height?: ProxyResolution) {
     if (!projectMedia || !source || !metadata) return
     proxySeek.current = { url: source.url, seconds: element.current?.currentTime ?? time }
     stopSequence()
-    setProxyId(usingProxy ? undefined : projectMedia.id)
+    setProxyFallback(undefined)
+    setProxyId(height ? { id: projectMedia.id, height } : undefined)
+  }
+
+  function switchWorkspace(next: typeof workspace) {
+    stopAutoPreview()
+    stopSequence()
+    setWorkspace(next)
+    if (next === 'ai') {
+      if (!autoMedia && mountedSource && metadata) setAutoMedia({ media: projectMedia ?? mountedSource, duration: metadata.duration })
+      setStudioTab('ai')
+      return
+    }
+    setStudioTab('media')
+    setLegacyView(next === 'easy')
+    if (next === 'professional') updateProject(value =>
+      value.timeline ? value : { ...value, version: 2, timeline: layerFromLegacy(value) })
+  }
+
+  function applyShorts(media: ProjectMedia, plan: ApprovedShorts) {
+    const next = appendApprovedShorts(project, media, plan)
+    if (!next) return false
+    switchWorkspace('easy')
+    updateProject(current => current === project ? next : current)
+    setSourceTab(false)
+    positionClip(next.clips[project.clips.length], false, next.media)
+    return true
   }
 
   function positionClip(clip: ProjectClip, play: boolean, media = project.media, seconds = clip.start) {
@@ -251,10 +284,13 @@ export function App() {
   }
 
   function loadProject(value: Project) {
+    setLegacyView(false)
+    setWorkspace(value.timeline ? 'professional' : 'easy')
     sourceChange.current++
     setCopilotProject(value => value + 1)
     stopSequence()
     stopAutoPreview()
+    setAutoMedia(undefined)
     pending.current = null
     proxySeek.current = null
     setProxyId(undefined)
@@ -422,6 +458,14 @@ export function App() {
           <img src={import.meta.env.BASE_URL + 'viralcut.svg'} alt="" width="38" height="38" />
           <div><strong>ViralCut <em>AI</em></strong><span>{desktop ? 'v' + version.replace(/-beta$/, ' Beta') : 'DESKTOP'}</span></div>
         </div>
+        {desktop && <nav className="workspace-modes locale" aria-label={language === 'tr' ? 'Çalışma alanı' : 'Workspace'}>
+          <button type="button" aria-pressed={workspace === 'easy'} onClick={() => switchWorkspace('easy')}>
+            {language === 'tr' ? 'Kolay Editör' : 'Easy Editor'}</button>
+          <button type="button" aria-pressed={workspace === 'professional'} onClick={() => switchWorkspace('professional')}>
+            {language === 'tr' ? 'Profesyonel Editör' : 'Professional Editor'}</button>
+          <button type="button" aria-pressed={workspace === 'ai'} onClick={() => switchWorkspace('ai')}>
+            {language === 'tr' ? 'AI Stüdyo' : 'AI Studio'}</button>
+        </nav>}
         <div className="top-actions">
           <div className="locale" role="group" aria-label={copy.language}>
             <Globe2 size={15} aria-hidden="true" />
@@ -483,6 +527,8 @@ export function App() {
             }}>
             <header className="panel-header viewer-header">
               <h2 id="preview-heading"><MonitorPlay size={17} />{copy.preview}</h2>
+              {usingProxy && <small>Proxy · {usingProxy.height}p</small>}
+              {source && proxyFallback === source.url && <small role="status">{language === 'tr' ? 'Proxy bulunamadı. Özgün video açıldı.' : 'Proxy unavailable. Showing original video.'}</small>}
               <span className="media-label" title={source?.file.name}>{source?.file.name ?? copy.noSource}</span>
               {source && <button type="button" className="export-cancel" onClick={() => detachPreview()} aria-label={copy.clearSource} title={copy.clearSource}><X size={15} /></button>}
             </header>
@@ -504,7 +550,7 @@ export function App() {
                   onEnded={event => { editor.setPlaying(false); advanceSequence(event.currentTarget, true) }}
                   onError={event => {
                     stopSequence()
-                    if (usingProxy) { proxySeek.current = { url: source.url, seconds: time }; setProxyId(undefined) }
+                    if (usingProxy) { proxySeek.current = { url: source.url, seconds: time }; setProxyId(undefined); setProxyFallback(source.url) }
                     else editor.fail(event.currentTarget)
                   }} />
               )}
@@ -552,11 +598,13 @@ export function App() {
           {desktop && (studioTab === 'effects' || studioTab === 'audio') && <EffectsPanel key={studioTab + (source?.url ?? '')}
             audio={studioTab === 'audio'} copy={copy} range={range} file={source?.file} cues={cues} effects={effects}
             edit={edit} update={updateEffects} undo={undoEffects} compare={compare} setCompare={setCompare} pause={stopSequence} />}
+          {desktop && studioTab === 'audio' && <Suspense fallback={null}><AudioInspector key={mountedSource?.id ?? 'audio-empty'}
+            id={mountedSource?.id} range={range} language={language} copy={copy} effects={effects} update={updateEffects} /></Suspense>}
           {desktop && <AutoShortsPanel key={autoMedia?.media.id ?? 'auto-empty'} copy={copy} language={language} media={autoMedia?.media}
             duration={autoMedia?.duration ?? 0} appearance={appearance} frame={edit.frame ?? project.frame}
-            open={media => { void chooseAutoSource(media) }} preview={previewAutoClip} stopPreview={stopAutoPreview} />}
+            open={media => { void chooseAutoSource(media) }} preview={previewAutoClip} stopPreview={stopAutoPreview} apply={applyShorts} />}
           {desktop && <DirectorPanel copy={copy} language={language} source={autoMedia}
-            open={media => { void chooseAutoSource(media) }} preview={previewAutoClip} load={loadProject} />}
+            open={media => { void chooseAutoSource(media) }} preview={previewAutoClip} load={loadProject} apply={applyShorts} />}
           {desktop && studioTab === 'performance' && <PerformanceCenter language={language} />}
           {desktop && studioTab === 'settings' && beta && <BetaSettings language={language} settings={beta} update={setBeta} version={version} />}
           {desktop && <CreatorPanel visible={studioTab === 'creator'} language={language} intent={creatorIntent}
@@ -616,8 +664,8 @@ export function App() {
                   const clip = project.clips.find(clip => clip.mediaId === media.id)
                   if (clip) { stopSequence(); positionClip(clip, false) }
                 }}><Film size={14} /><span>{media.name}</span></button>)}
-              <MediaPreparation key={projectMedia?.id ?? 'none'} media={projectMedia} copy={copy} proxy={usingProxy}
-                toggleProxy={toggleProxy} setWaveform={storeWaveform} kind="proxy" />
+              <MediaPreparation key={projectMedia?.id ?? 'none'} media={projectMedia} copy={copy} proxy={usingProxy?.height}
+                selectProxy={selectProxy} setWaveform={storeWaveform} kind="proxy" tr={language === 'tr'} />
             </div></section>}
           <ShortsPanel key={'shorts:' + (source?.url ?? '')} editor={editor} copy={copy} cues={cues} edit={edit}
             clearRemoval={() => setShorts(current => current.file === source?.file && current.edit
@@ -633,7 +681,7 @@ export function App() {
             }} appearance={appearance} setAppearance={setAppearance} language={language} />
           {desktop && <div className="studio-speech" ref={setSpeechHost} />}
           {desktop && studioTab === 'audio' && <MediaPreparation key={projectMedia?.id ?? 'none'} media={projectMedia} copy={copy}
-            proxy={usingProxy} toggleProxy={toggleProxy} setWaveform={storeWaveform} kind="waveform" />}
+            selectProxy={selectProxy} setWaveform={storeWaveform} kind="waveform" tr={language === 'tr'} />}
           </div>
 
           <aside className="inspector">
@@ -673,6 +721,7 @@ export function App() {
           </aside>
           {!desktop && singleExport}
           <ProjectPanel libraryHost={effectHost} selectLayer={setLayerSelected} project={project} copy={copy} media={projectMedia} current={currentClip} setCurrent={setCurrentClip}
+            legacyView={legacyView} switchEditView={layered => switchWorkspace(layered ? 'professional' : 'easy')}
             autosaveInterval={beta?.interval ?? 5} language={language} projectEpoch={copilotProject}
             undo={!!history.previous.length} redo={!!history.next.length} history={type => { stopSequence(); dispatch({ type }) }}
             update={updateProject} load={loadProject} addMedia={entries => { void addProjectMedia(entries) }}

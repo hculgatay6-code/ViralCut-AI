@@ -1,4 +1,5 @@
-import { ExportError, inputOptions, run } from './media.mjs'
+import { ExportError, inputOptions, probe, run } from './media.mjs'
+import { ffmpegThreads } from './resource-budget.mjs'
 
 export function studioAudioSettings(value) {
   if (value === undefined) return
@@ -24,6 +25,32 @@ export async function measureLoudness(file, signal, extra = [], input = inputOpt
   await run('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'info', ...input, '-i', file, ...extra,
     '-map', '0:a:0', '-vn', '-af', 'loudnorm=I=-16:TP=-2:LRA=11:print_format=json', '-f', 'null', '-'], signal, reader.line, { stderrLines: true })
   return reader.result()
+}
+
+export async function analyzeAudio({ input, format, start, end, signal, onProgress }) {
+  const info = await probe(input, format, signal).catch(() => {
+    signal.throwIfAborted()
+    throw new ExportError('badSource')
+  })
+  const audio = info.streams?.find(stream => stream.codec_type === 'audio')
+  if (!audio) throw new ExportError('noAudio')
+  const video = info.streams?.find(stream => stream.codec_type === 'video' && !stream.disposition?.attached_pic)
+  const duration = Number(info.format?.duration)
+  if (!Number.isFinite(duration) || start >= duration || end > duration + .05) throw new ExportError('badRange')
+  const length = Math.min(end, duration) - start
+  const reader = loudnessReader()
+  await run('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'info', '-threads', ffmpegThreads(2),
+    '-filter_threads', '1', '-progress', 'pipe:2', '-stats_period', '0.25', ...inputOptions(format),
+    '-ss', String(start), '-i', input, '-t', String(length), '-map', '0:a:0', '-vn',
+    '-af', 'loudnorm=I=-16:TP=-2:LRA=11:print_format=json', '-f', 'null', '-'], signal, line => {
+    if (line.startsWith('out_time_us=')) {
+      const time = Number(line.slice(12))
+      if (Number.isFinite(time)) onProgress(Math.min(99, time / 10000 / length))
+    } else if (!/^(?:out_time|frame|fps|bitrate|total_size|speed|dup_frames|drop_frames|progress)[_a-z]*=/.test(line)) reader.line(line)
+  }, { stderrLines: true })
+  const audioStart = Number(audio.start_time), videoStart = Number(video?.start_time)
+  return { ...reader.result(), duration: length, streamDeltaMs: Number.isFinite(audioStart) && Number.isFinite(videoStart)
+    ? Math.round((audioStart - videoStart) * 1000) : null }
 }
 
 export async function masterStudioAudio(input, output, duration, sourceAudio, settings, music, signal) {

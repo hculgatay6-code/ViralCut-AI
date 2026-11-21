@@ -32,13 +32,17 @@ export interface ProjectBridge {
   autosave(project: Project): Promise<{ saved?: boolean; error?: string; disabled?: boolean }>
   hasRecovery(): Promise<{ available?: boolean; damaged?: boolean; fallback?: boolean }>
   recover(): Promise<{ project?: Project; error?: string }>
-  prepare(id: string, type: PreviewKind): Promise<PreviewResult>
-  previewStatus(id: string, type: PreviewKind): Promise<PreviewResult>
-  cancelPreview(id: string, type: PreviewKind): Promise<PreviewResult>
+  prepare(id: string, type: PreviewKind, height?: ProxyResolution, device?: 'auto' | 'cpu'): Promise<PreviewResult>
+  previewStatus(id: string, type: PreviewKind, height?: ProxyResolution): Promise<PreviewResult>
+  cancelPreview(id: string, type: PreviewKind, height?: ProxyResolution): Promise<PreviewResult>
 }
 
 export type PreviewKind = 'proxy' | 'waveform'
-export type PreviewResult = { phase?: 'idle' | 'queued' | 'running' | 'ready' | 'failed' | 'cancelled'; progress?: number; peaks?: number[]; step?: number; error?: string }
+export type ProxyResolution = 360 | 540 | 720
+export type PreviewResult = {
+  phase?: 'idle' | 'queued' | 'running' | 'ready' | 'failed' | 'cancelled'; progress?: number; peaks?: number[]; step?: number; error?: string
+  width?: number; height?: number; resolution?: ProxyResolution; cached?: boolean; encoder?: string; decoder?: string
+}
 export type Waveform = { peaks: number[]; step: number }
 
 export interface History { previous: Project[]; present: Project; next: Project[] }

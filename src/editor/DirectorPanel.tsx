@@ -15,17 +15,20 @@ import type { ClipRange } from './model'
 import type { Frame } from './shorts'
 import { captionStyles, colorStyles, intensities, studioDefaults } from './cinematic'
 import type { StudioSettings } from './cinematic'
+import { speechCutInside } from './approved-shorts'
+import type { ApprovedShorts } from './approved-shorts'
 
 const phases = ['prepare', 'silence', 'speech', 'vision', 'media', 'ranking', 'plan', 'render', 'quality'] as const
 type Phase = typeof phases[number]
 type State = 'idle' | 'running' | 'ready' | 'failed' | 'cancelled'
 const nextPoll = () => new Promise<void>(resolve => setTimeout(resolve, 400))
 
-export function DirectorPanel({ language, copy, source, open, preview, load }: {
+export function DirectorPanel({ language, copy, source, open, preview, load, apply }: {
   language: Language; copy: Copy; source?: { media: ProjectMedia; duration: number }
   open(media: ProjectMedia): void
   preview(range: ClipRange, cues: Cue[], appearance: Appearance, frame: Frame, remove: ClipRange[], effects?: StudioEffects): void
   load(project: Project): void
+  apply(media: ProjectMedia, plan: ApprovedShorts): boolean
 }) {
   const tr = language === 'tr'
   const l = (turkish: string, english: string) => tr ? turkish : english
@@ -252,6 +255,8 @@ export function DirectorPanel({ language, copy, source, open, preview, load }: {
         <strong>{copy.autoClip} {index + 1} · {timecode(editedDuration(row.item, row.item.remove), false)} · {row.clip.evaluation?.score ?? '—'}/100</strong>
         <p>{timecode(row.item.start)} – {timecode(row.item.end)} · {row.item.overlay?.cues.length ?? 0} {l('altyazı', 'captions')}</p>
         <p>{row.clip.evaluation?.reasons.map(reason => copy.semanticReasons[reason]).join(' · ')}</p>
+        {analysis && speechCutInside(row.item, analysis.cues) && <p role="status">
+          {l('Bir kesim konuşma aralığının içinde.', 'A cut falls inside detected speech.')}</p>}
         <p>{styleNames[profiles.indexOf(row.style)]} · {row.item.frame.fit ? l('Tam kare', 'Full frame') : row.item.frame.track?.length ? l('Konu takibi', 'Subject tracking') : l('Merkez kadraj', 'Center crop')}</p>
         {row.clip.picture?.wideFaces && !row.item.frame.fit && <p>{l('Örneklenen yüzlerden biri dikey kesimden geniş. Tam kareyi değerlendir.', 'A sampled face is wider than the portrait crop. Consider keeping the full frame.')}</p>}
         {!busy && <div className="auto-settings">
@@ -268,6 +273,11 @@ export function DirectorPanel({ language, copy, source, open, preview, load }: {
         </div>
       </article>)}
       {!busy && !!selected.length && <button className="primary" disabled={!valid} onClick={() => void run(true)}>{l('Planı MP4 ve proje olarak kaydet', 'Export plan as MP4 and projects')}</button>}
+      {!busy && source && !!selected.length && <button className="export-cancel" disabled={!valid} onClick={() => {
+        const ok = apply(source.media, { resolution, encoder: 'auto', items: selected.map(row => ({ ...row.item,
+          mastering: settings.target === null ? undefined : { target: settings.target, musicLevel: settings.musicLevel } })) })
+        if (!ok) setError(copy.autoInvalid)
+      }}>{l('Planı Kolay Editöre ekle', 'Add plan to Easy Editor')}</button>}
       {!busy && !valid && <p role="alert">{copy.autoInvalid}</p>}
       {batch?.items.map((item, index) => <article className="auto-card" key={index}>
         <strong>{index + 1} · {item.filename ?? copy.autoClip} · {item.phase === 'ready' ? l('Doğrulandı', 'Verified') : item.phase === 'failed' ? l('Başarısız', 'Failed') :

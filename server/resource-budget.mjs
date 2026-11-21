@@ -8,7 +8,7 @@ export const fastDecode = () => workerBudget.getStore()?.decode
 export const profileNames = ['eco', 'balanced', 'performance']
 
 export function createResourceBudget({ free = freemem, total = totalmem, cores = availableParallelism, poll = 800 } = {}) {
-  let profile = 'balanced', active, waiting = 0
+  let profile = 'balanced', active, waiting = 0, foregroundWaiting = 0, interruptBackground
   const mib = 1048576
   function memory() {
     const capacity = total()
@@ -21,24 +21,32 @@ export function createResourceBudget({ free = freemem, total = totalmem, cores =
       const { available, capacity, pressure } = memory()
       return { profile, active, waiting, pressure, availableMiB: Math.round(available / mib), totalMiB: Math.round(capacity / mib) }
     },
-    async work(label, signal, run, { wait, decode, trim } = {}) {
+    async work(label, signal, run, { wait, decode, trim, background = false, interrupt } = {}) {
       signal.throwIfAborted()
       waiting++
+      if (!background) {
+        foregroundWaiting++
+        interruptBackground?.()
+      }
       try {
-        while (active || memory().pressure) {
+        while (active || memory().pressure || (background && foregroundWaiting)) {
           wait?.()
           if (!active) await trim?.()
           await setTimeout(poll, undefined, { signal })
         }
         active = label
-      } finally { waiting-- }
+        if (background) interruptBackground = interrupt
+      } finally {
+        waiting--
+        if (!background) foregroundWaiting--
+      }
       try {
         const { available, capacity } = memory()
         const roomy = available > Math.max(2400 * mib, capacity * .20)
-        const threads = Math.max(1, Math.min(cores(), profile === 'eco' || !roomy ? 2 : 4))
+        const threads = Math.max(1, Math.min(cores(), profile === 'eco' || !roomy ? 2 : profile === 'performance' ? 4 : 3))
         if (profile === 'eco' || !roomy) await trim?.()
         return await workerBudget.run({ threads, decode: profile === 'performance' && roomy ? decode : undefined }, run)
-      } finally { active = undefined }
+      } finally { active = undefined; interruptBackground = undefined }
     },
   }
 }

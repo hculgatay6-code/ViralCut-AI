@@ -2,14 +2,15 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promis
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
-const operations = new Set(['export', 'sequence', 'transcribe', 'silence', 'shorts-analysis', 'batch', 'proxy', 'waveform',
+const operations = new Set(['export', 'sequence', 'transcribe', 'silence', 'shorts-analysis', 'batch', 'proxy', 'waveform', 'audio-analysis',
   'cleanup', 'startup', 'renderer', 'save-clip', 'project-save', 'project-open', 'project-autosave', 'project-recover',
   'studio-cover-save', 'studio-template-save', 'source-file', 'session', 'diagnostics-export', 'beta-settings-save'])
 const outcomes = new Set(['ready', 'failed', 'cancelled'])
 const codes = new Set(['badProject', 'badSource', 'badRange', 'badSubtitles', 'badEdit', 'badRequest', 'jobMissing',
   'diskFull', 'accessDenied', 'encodeFailed', 'verifyFailed', 'clipDecodeFailed', 'visualDecodeFailed', 'uploadFailed', 'saveFailed', 'noAudio', 'emptyEdit',
   'missingProjectMedia', 'sourceProtected', 'tooManyCues', 'toolsUnavailable', 'whisperUnavailable', 'transcriptFailed',
-  'rendererGone', 'startupFailed', 'uncleanExit', 'invalidSettings', 'ENOSPC', 'EACCES', 'EPERM', 'EBUSY', 'ENOTEMPTY', 'ENOENT', 'EROFS'])
+  'rendererGone', 'startupFailed', 'uncleanExit', 'invalidSettings', 'proxyLimit', 'proxyHdr',
+  'ENOSPC', 'EACCES', 'EPERM', 'EBUSY', 'ENOTEMPTY', 'ENOENT', 'EROFS'])
 
 export async function createDiagnostics(folder) {
   const path = join(folder, 'diagnostics.json')

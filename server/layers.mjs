@@ -7,6 +7,7 @@ import { encoderArgs, ExportError, inputOptions, probe, run } from './media.mjs'
 import { outputSize, validateEdit, validateProfile } from './shorts.mjs'
 import { ffmpegThreads } from './resource-budget.mjs'
 import { layerLimits, timelineDocument } from './timeline-document.mjs'
+import { proxyProfiles } from './proxy-cache.mjs'
 
 export function validateLayeredSequence(settings, resolveMedia) {
   const { encoder, appearance, preview } = settings
@@ -22,6 +23,7 @@ export function validateLayeredSequence(settings, resolveMedia) {
   const to = preview === undefined ? duration : preview?.to
   if (![from, to].every(Number.isSafeInteger) || from < 0 || from >= to || to > duration ||
       (preview !== undefined && to - from > timeline.fps * 8)) throw new ExportError('badRange', 400)
+  if (preview?.proxy !== undefined && !proxyProfiles.includes(preview.proxy)) throw new ExportError('badEdit', 400)
 
   const solo = timeline.tracks.some(track => track.kind === 'audio' && !track.hidden && track.solo && !track.muted)
   const sources = new Map()
@@ -80,7 +82,8 @@ export function validateLayeredSequence(settings, resolveMedia) {
         clips.filter(clip => clip.kind === 'audio').length > layerLimits.audio) throw new ExportError('layerConcurrency', 400)
     return { start, end, clips }
   })
-  return { kind: 'sequence', monitor: preview !== undefined, spans, profile, frame, encoder, overlay, titles, animatedCaptions }
+  return { kind: 'sequence', monitor: preview !== undefined, previewProxy: preview?.proxy,
+    spans, profile, frame, encoder, overlay, titles, animatedCaptions }
 }
 
 function dimensions(value) { return Math.max(2, Math.round(value / 2) * 2) }
@@ -219,7 +222,7 @@ export async function encodeLayeredSequence({ spans, profile, frame, encoder, ov
         : `anullsrc=r=48000:cl=stereo,atrim=duration=${sec}[mix]`)
       await writeFile(join(directory, 'layers.filters'), filters.join(';'))
       await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-n', '-xerror',
-        '-progress', 'pipe:1', '-stats_period', '0.25', ...input, '-filter_complex_threads', '2', '-/filter_complex', 'layers.filters',
+        '-progress', 'pipe:1', '-stats_period', '0.25', ...input, '-filter_complex_threads', ffmpegThreads(2), '-/filter_complex', 'layers.filters',
         '-t', sec, '-map', '[picture]', '-map', '[mix]', '-map_metadata', '-1', '-map_chapters', '-1',
         ...encoderArgs(gpu, profile), '-bf', '0', '-c:a', 'pcm_s16le', '-f', 'matroska', files[index]], signal, line => {
         if (!line.startsWith('out_time_us=')) return

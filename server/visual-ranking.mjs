@@ -2,8 +2,21 @@ const limit = value => Math.max(0, Math.min(1, value))
 const percent = value => Math.round(100 * limit(value))
 const center = box => (box.left + box.right) / 2
 
+export function visualWindow(rows, start, end) {
+  function lowerBound(time) {
+    let left = 0, right = rows.length
+    while (left < right) {
+      const middle = (left + right) >>> 1
+      if (rows[middle].time < time) left = middle + 1
+      else right = middle
+    }
+    return left
+  }
+  return rows.slice(lowerBound(start), lowerBound(end))
+}
+
 export function visualMetrics(rows, start, end) {
-  const inRange = rows.filter(row => row.time >= start && row.time < end)
+  const inRange = visualWindow(rows, start, end)
   const count = inRange.length || 1
   return {
     motion: percent(inRange.reduce((sum, row) => sum + Math.min(1, row.motion), 0) / count),
@@ -22,7 +35,7 @@ export function rankVisual(rows, duration, goal, gaming, energy = [], count = 5)
     }
   }
   const signature = (start, end) => {
-    const samples = rows.filter(row => row.time >= start && row.time < end)
+    const samples = visualWindow(rows, start, end)
     const bins = Array(16).fill(0)
     for (const row of samples) for (let index = 0; index < bins.length; index++) bins[index] += row.histogram[index] / Math.max(1, samples.length)
     return bins
@@ -30,7 +43,7 @@ export function rankVisual(rows, duration, goal, gaming, energy = [], count = 5)
   const optionsRanked = [...options].map(start => {
     const end = start + length
     const visual = visualMetrics(rows, start, end)
-    const samples = energy.filter(row => row.time >= start && row.time < end)
+    const samples = visualWindow(energy, start, end)
     const sound = samples.length ? percent(samples.reduce((sum, row) => sum + limit((row.db + 52) / 32), 0) / samples.length) : null
     const score = Math.round(visual.motion * (gaming ? .66 : .48) + Math.min(1, visual.events / 4) * (gaming ? 20 : 23) +
       Math.min(1, visual.objects.length / 3) * (gaming ? 4 : 16) + 9 * length / goal + (sound ?? 30) * .06)

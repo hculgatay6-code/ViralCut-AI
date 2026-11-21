@@ -10,7 +10,7 @@ import { encodeClip, ExportError, inputOptions, probe, run } from './media.mjs'
 import { transcribe } from './whisper.mjs'
 import { validateEffects } from './effects.mjs'
 import { measureShorts, verifyShort } from './shorts-quality.mjs'
-import { rankVisual, subjectTrack, visualMetrics } from './visual-ranking.mjs'
+import { rankVisual, subjectTrack, visualMetrics, visualWindow } from './visual-ranking.mjs'
 import { studioAudioSettings } from './studio-audio.mjs'
 import { creatorProfile, validatePlatformMedia } from './creator.mjs'
 
@@ -61,10 +61,10 @@ export async function analyzeShorts(options) {
     const ratio = video.width / video.height
     const track = visualMode === 'gaming' ? [] : subjectTrack(visual.detections, item.start, item.end, ratio, director)
     if (!director) return { ...item, id, track }
-    const frames = visual.rows.filter(row => row.time >= item.start && row.time < item.end)
+    const frames = visualWindow(visual.rows, item.start, item.end)
     const mean = key => frames.length ? frames.reduce((sum, row) => sum + (row[key] ?? 0), 0) / frames.length : 0
     const cuts = frames.filter(row => row.cut).map(row => row.time)
-    const faces = visual.detections.filter(row => row.time >= item.start && row.time < item.end)
+    const faces = visualWindow(visual.detections, item.start, item.end)
       .flatMap(row => row.boxes.filter(box => box.label === 'face').map(box => ({ time: row.time, left: box.left, right: box.right })))
     return { ...item, id, track, picture: frames.length ? { light: mean('light'), bright: mean('bright'), tint: mean('tint'),
       cuts, wideFaces: faces.some(box => box.right - box.left > (9 / 16) / ratio) } : undefined }
