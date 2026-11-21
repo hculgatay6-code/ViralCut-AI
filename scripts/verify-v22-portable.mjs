@@ -43,8 +43,17 @@ try {
   console.log('Portable startup including extraction ms', Math.round(performance.now() - started))
   origin = new URL(page.url()).origin
   assert.equal((await fetch(origin)).status, 403)
-  await page.locator('input[type=file]').first().setInputFiles(resolve(fixture))
-  await page.waitForFunction(() => document.querySelector('.main-video')?.readyState > 0)
+  const client = await page.context().newCDPSession(page)
+  const doc = await client.send('DOM.getDocument')
+  const input = await client.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '.topbar input[type=file]' })
+  assert.ok(input.nodeId)
+  await client.send('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [resolve(fixture)] })
+  try { await page.waitForFunction(() => document.querySelector('.main-video')?.readyState > 0) }
+  catch (error) {
+    console.log('Editor alerts', await page.getByRole('alert').allTextContents())
+    console.log('Diagnostics', await page.evaluate(() => window.viralCutDesktop.diagnostics()))
+    throw error
+  }
   await page.locator('.studio-tools').getByRole('button', { name: 'Efektler', exact: true }).click()
   await page.getByRole('button', { name: 'İşlenmiş örnek', exact: true }).click()
   await page.waitForFunction(() => document.querySelector('.fx-monitor')?.readyState >= 2, undefined, { timeout: 45000 })

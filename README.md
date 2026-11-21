@@ -4,13 +4,22 @@
 
 # ViralCut AI Desktop
 
-**v21.0.0 Effects & Transitions Studio · Windows x64 · Türkçe / English**
+**v22.0.0 Performance & AI Studio · Windows x64 · Türkçe / English**
 
 Yerel video düzenleme, otomatik altyazı ve dikey video hazırlama uygulaması.
 
 A local video editor for cutting footage, generating captions, and preparing vertical clips.
 
 [Türkçe](#türkçe) · [English](#english) · [Ekran görüntüleri / Screenshots](#ekran-görüntüleri--screenshots) · [Sürümler / Releases](https://github.com/hculgatay6-code/ViralCut-AI/releases) · [Değişiklik günlüğü / Changelog](CHANGELOG.md)
+
+## v22.0.0 · Performance & AI Studio
+
+- **Kolay Editör**, kaynak düzenleme, altyazı, sessizlik ve MP4 araçlarını bir arada tutar. **Profesyonel Editör**, çok katmanlı düzeni açar. **AI Stüdyo**, Shorts ve otomatik kurgu araçlarına geçer.
+- Medya panelinde 360p, 540p veya 720p proxy hazırla. Profesyonel düzenleyicide **Önizleme kaynağı** listesinden hazır proxy’leri kullanabilirsin. Son MP4 özgün kaynaklardan üretilir.
+- 2, 4 veya 8 saniyelik önizleme seç. Aynı aralığa geri dönüldüğünde doğrulanmış geçici çıktı yeniden kullanılabilir. **Ses Stüdyosu**, seçili aralığın LUFS ve dBTP değerlerini ölçer.
+- Türkçe ayrıntılar [kullanım kılavuzunda](V22_KULLANIM_KILAVUZU.md), [test raporunda](V22_TEST_RAPORU.md) ve [performans raporunda](V22_PERFORMANCE_RAPORU.md) yer alır.
+
+Use **Easy Editor** for source edits and **Professional Editor** for the multitrack timeline. **AI Studio** opens the Shorts tools and lets you send approved cuts to Easy Editor. Generate 360p, 540p or 720p editing proxies, switch the preview source, and reuse a rendered timeline range. Final MP4 export reads original media. The download links below point to the published v18.1 Beta.
 
 ## v21.0.0 · Effects & Transitions Studio
 

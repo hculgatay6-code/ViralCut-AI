@@ -35,3 +35,17 @@ The published executables report `--enable-gpl`, `--enable-version3`, and `--ena
 The existing upstream FFmpeg snapshot and configure flags do not establish a complete Corresponding Source offer for the delivered static binaries. The unresolved scope is the exact source of linked non-system libraries and the build scripts, patches, and installation information required for the relevant distribution. The GPL text and copyright notices must accompany the covered work. Corresponding Source needs to be offered in accordance with the license. A complete source set and any applicable notice requirements have not been verified. [FFmpeg license guidance](https://ffmpeg.org/legal.html) · [GPLv3, §§1 and 6](https://www.gnu.org/licenses/gpl-3.0.html)
 
 The local v18.1.1-beta candidate uses the vendor’s 9.0.2 Essentials ZIP, SHA-256 `60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba`. It is a smaller GPL-enabled build. Its included FFmpeg upstream source, license, flags and supplier README are provided as evidence. Corresponding-source coverage for that binary is still open. A future distributable package should use a build with a verified, complete source and build-material bundle that recipients can access. This is also an item for legal review before further distribution. [Vendor downloads](https://www.gyan.dev/ffmpeg/builds/) · [FFmpeg 9.0.2 source](https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz)
+
+### v22 local validation package
+
+The Windows validation package uses the same Gyan 9.0.2 Essentials binaries, exposed to the editor as local child processes. The table identifies the binaries and the available upstream snapshot.
+
+| File | SHA-256 |
+| --- | --- |
+| ffmpeg.exe | `3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec` |
+| ffprobe.exe | `f0d36ecbbdd3bcfac3efa078c96c7271c2e68b3810595552ac3b7f17e9a65c52` |
+| ffmpeg-9.0.2.tar.xz | `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e` |
+
+The executable reports the GPL, version 3 and static build flags. The configuration includes libx264, libx265, libass and NVIDIA encoding. The package contains the upstream FFmpeg snapshot, GPL text, configuration and vendor inventory. The inventory identifies components including x264 and libass. The complete matching source, patches and scripts for the linked non-system components have yet to be verified. Before redistribution, obtain a complete Corresponding Source bundle for these binaries or build and document independently reproducible equivalents. Validate the license notices and source delivery method for the resulting package. [FFmpeg license guidance](https://ffmpeg.org/legal.html) · [GPLv3 sections 1 and 6](https://www.gnu.org/licenses/gpl-3.0.html)
+
+The application keeps the licensing of the existing Electron, Whisper, ONNX Runtime and font distributions. v22 adds no npm dependency and uses the previously supported local models.

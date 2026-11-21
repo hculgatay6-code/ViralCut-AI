@@ -1,5 +1,14 @@
 # Değişiklik günlüğü
 
+## v22.0.0
+
+- Kalıcı 360p, 540p ve 720p düzenleme proxy’leri, disk alanı kontrolü, iptal, yeniden deneme, kaynak değişikliği doğrulaması ve özgün medyaya geri dönüş.
+- Aynı aralığa dönüşte yeniden kullanılabilen katmanlı önizleme, 2/4/8 saniye seçimi, döngü ve imleç eşleme. MP4 dışa aktarma özgün medyayı kullanır.
+- Proxy ve dalga formu işleri bellek sınırlarına ve öncelik kuyruğuna bağlandı. Performans Merkezi önbellek boyutlarını, etkin işlemleri ve donanım ölçümlerini gösterir.
+- Kolay Editör, Profesyonel Editör ve AI Stüdyo geçişleri. Shorts ve Yönetmen planlarını onayla ve düzenlenebilir kesimler olarak Kolay Editör’e ekle.
+- Seçili aralıkta LUFS ve true peak ölçümü, yüksek tepe uyarıları, konuşma filtreleri ve ses ayarlarını geri yükleme.
+- [Test raporu](V22_TEST_RAPORU.md) · [Performans raporu](V22_PERFORMANCE_RAPORU.md) · [Kullanım kılavuzu](V22_KULLANIM_KILAVUZU.md)
+
 ## v21.0.0
 
 - Gerçek FFmpeg renderına bağlı 28 video efekti, sekiz adımlı sıralanabilir zincir, etkinleştirme, kopyalama ve kare bazlı yoğunluk animasyonu.
